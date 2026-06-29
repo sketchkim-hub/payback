@@ -82,6 +82,15 @@
   .bar-fill{height:100%;border-radius:7px;min-width:3px;transition:width .5s ease}
   .bar-val{flex:0 0 auto;color:var(--ink-soft);font-size:11.5px;white-space:nowrap}
   .bar-val b{color:var(--ink)}
+  /* 기존 수령 내역 패널 */
+  .histbox{display:none;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fff;font-size:12.5px}
+  .histbox.show{display:block}
+  .histbox .h-title{font-weight:700;margin-bottom:6px}
+  .histbox .h-item{display:flex;justify-content:space-between;color:var(--ink-soft);padding:2px 0}
+  .histbox .h-sum{border-top:1px dashed var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:700}
+  .histbox .h-next{margin-top:6px;color:var(--dancheong-blue);font-weight:700}
+  .histbox .h-warn{margin-top:8px;color:var(--dancheong-red);font-weight:700;line-height:1.4}
+  .histbox.cap{border-color:var(--dancheong-red);background:#fbeae6}
   button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-weight:700}
   .btn{width:100%;padding:14px;background:var(--ink);color:#fff;font-size:15px;margin-top:18px}
   .btn:hover{background:#000}
@@ -237,6 +246,7 @@
         <label for="fAmount">구매금액 (원)</label>
         <input id="fAmount" type="number" inputmode="numeric" placeholder="예: 35000" min="0" />
         <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
+        <div id="historyBox" class="histbox"></div>
 
         <div class="consent">
           <input id="fConsent" type="checkbox" />
@@ -468,40 +478,62 @@ function startApp(){
   /* ---------- 쿠폰 판정 ---------- */
   const couponFor = amt => amt>=50000 ? 10000 : amt>=30000 ? 5000 : 0;
 
-  /* ---------- 지급액 미리보기 (이름+생년월일 입력 시 한도 반영) ---------- */
-  const norm = s => String(s||"").replace(/\s/g,"");
-  function priorPaidFor(name, birth, phone){
-    // 전체 기간 누적: 이름·생년월일 일치(전화번호 입력 시 함께 대조)
-    const m = records.filter(x => norm(x.name)===norm(name) && x.birth===birth && (phone? x.phone===phone : true));
-    return { paid: m.reduce((s,x)=>s+(x.coupon||0),0), matched: m.length };
+  /* ---------- 지급액 미리보기 + 기존 수령 내역 ---------- */
+  // 이름에서 한글·영문·숫자 외 문자(백틱·공백·기호 등)는 무시하고 대조
+  const cleanName = s => String(s||"").replace(/[^가-힣A-Za-z0-9]/g,"");
+  const digitsOnly = s => String(s||"").replace(/\D/g,"");
+  // 이름(정규화)+생년월일 일치하는 기존 기록 (전화번호 무관 — 동일인 가능성 표시용)
+  function matchByNameBirth(name, birth){
+    const cn = cleanName(name);
+    return records.filter(x => cleanName(x.name)===cn && x.birth===birth);
   }
   function updatePreview(){
     const el = $("couponPreview");
+    const box = $("historyBox"); box.className="histbox";
     const amount = Number($("fAmount").value);
     const tier = couponFor(amount);
     const name = $("fName").value.trim();
     const birth = getBirth();
-    const phone = $("fPhone").value.replace(/\D/g,"");
+    const phone = digitsOnly($("fPhone").value);
+    const cn = cleanName(name);
     const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
 
     if (!amount){ el.innerHTML = "금액을 입력하면 지급될 상품권이 표시됩니다."; return; }
     if (tier===0){ el.innerHTML = `3만원 이상 구매 시 상품권이 지급됩니다. (입력: ${won(amount)}원)`; return; }
 
     // 이름+생년월일이 있으면 누적 한도 반영
-    if (name && birth && birth!=="INVALID"){
-      const { paid, matched } = priorPaidFor(name, birth, phone);
+    if (cn && birth && birth!=="INVALID"){
+      const matches = matchByNameBirth(name, birth);
+      const paid = matches.reduce((s,x)=>s+(x.coupon||0),0);
       const remaining = PAYOUT_CAP - paid;
+      const grant = Math.max(0, Math.min(tier, remaining));
+
+      // 한 줄 요약
       if (remaining<=0){
         el.innerHTML = `<b style="color:${col10}">지급 한도(${won(PAYOUT_CAP)}원) 초과</b> · 기존 ${won(paid)}원 수령 → 추가 지급 불가`;
-        return;
-      }
-      const grant = Math.min(tier, remaining);
-      const tag = (!phone && matched>0) ? ` <span style="color:var(--ink-soft)">(전화번호 입력 시 확정)</span>` : "";
-      if (paid>0){
+      } else if (paid>0){
         el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원</b>`
-          + ` <span style="color:var(--ink-soft)">· 기존 ${won(paid)}원 / 잔여한도 ${won(remaining)}원</span>${tag}`;
+          + ` <span style="color:var(--ink-soft)">· 기존 ${won(paid)}원 / 잔여한도 ${won(remaining)}원</span>`;
       } else {
-        el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원 상품권</b>${tag}`;
+        el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원 상품권</b>`;
+      }
+
+      // 이름 3글자 이상 + 기존 내역 있으면 상세 패널 표시
+      if (cn.length>=3 && matches.length>0){
+        const items = [...matches].sort((a,b)=>(a.date>b.date?1:-1)).map(x=>
+          `<div class="h-item"><span>${esc(x.date)} · ${esc(x.district||"-")}</span><span>${won(x.coupon)}원</span></div>`).join("");
+        const diffPhone = phone && matches.some(x=> digitsOnly(x.phone)!==phone);
+        const warn = remaining<=0
+          ? `<div class="h-warn">⚠ 누적 한도(${won(PAYOUT_CAP)}원) 도달 — 더 이상 지급할 수 없습니다.</div>`
+          : (grant<tier ? `<div class="h-warn">⚠ 남은 한도가 ${won(remaining)}원이라 이번엔 ${won(grant)}원만 지급됩니다.</div>` : "");
+        const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인 여부를 확인하세요.</div>` : "";
+        box.className = "histbox show" + (remaining<=0?" cap":"");
+        box.innerHTML =
+          `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} 기존 수령 내역</div>`
+          + items
+          + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원</span></div>`
+          + (remaining>0 ? `<div class="h-next">이번 지급 예정: ${won(grant)}원 (지급 시 누적 ${won(paid+grant)}원 / 잔여 ${won(remaining-grant)}원)</div>` : "")
+          + warn + phoneWarn;
       }
       return;
     }
@@ -512,9 +544,9 @@ function startApp(){
   ["fName","fPhone","fAmount"].forEach(id => $(id).addEventListener("input", updatePreview));
   [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
 
-  /* ---------- 중복키 ---------- */
+  /* ---------- 중복키 (이름 정규화) ---------- */
   async function makeDupKey(name, birth, phone){
-    const raw = name.replace(/\s/g,"") + "|" + birth + "|" + phone.replace(/\D/g,"");
+    const raw = cleanName(name) + "|" + birth + "|" + digitsOnly(phone);
     const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
     return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
   }
@@ -541,7 +573,9 @@ function startApp(){
     if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
 
     const dupKey = await makeDupKey(name, birth, phoneRaw);
-    const prior = records.filter(x => x.dupKey === dupKey);
+    // 누적 대조: 이름(정규화)·생년월일·전화번호 일치 — 백틱/공백 등 군더더기 무시
+    const prior = records.filter(x =>
+      cleanName(x.name)===cleanName(name) && x.birth===birth && digitsOnly(x.phone)===phoneRaw);
     const CAP = PAYOUT_CAP;                               // 1인 전체 기간 누적 지급 한도
     const paid = prior.reduce((s,x)=> s + (x.coupon||0), 0);
     const remaining = CAP - paid;
@@ -570,7 +604,7 @@ function startApp(){
       }
       r.innerHTML = `<span class="big">✔ ${won(grant)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)${note}`;
       ["fName","fPhone","fAmount","fAddress"].forEach(id=>$(id).value=""); clearBirth(); $("fDistrict").value="";
-      $("fConsent").checked=false; $("fMarketing").checked=false; $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
+      $("fConsent").checked=false; $("fMarketing").checked=false; $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다."; $("historyBox").className="histbox";
       $("fName").focus();
     }catch(e){ toast(r,"warn","저장 실패","네트워크/권한 오류: "+ e.code); }
     finally{ $("submitBtn").disabled=false; }
