@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>전통시장 페이백 행사 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --hanji:#f3ece0;       /* 한지 바탕 */
+    --hanji-2:#ece2d2;
+    --ink:#2b2a26;         /* 먹색 */
+    --ink-soft:#6a655c;
+    --line:#d9cdb8;
+    --dancheong-blue:#1f6f6b;   /* 단청 청록 */
+    --dancheong-red:#b3331f;    /* 단청 적 (도장) */
+    --dancheong-gold:#c79a3c;   /* 단청 황 */
+    --paper:#fbf7ef;
+    --good:#1f6f6b;
+    --warn:#b3331f;
+    --radius:14px;
+    --shadow:0 8px 30px rgba(43,42,38,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Noto Sans KR",system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(circle at 12% 8%, rgba(199,154,60,.08), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgba(31,111,107,.08), transparent 42%),
+      var(--hanji);
+    background-attachment:fixed;
+    min-height:100vh;
+    line-height:1.55;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+  /* 도장 로고 */
+  .seal{
+    width:54px;height:54px;flex:0 0 54px;border-radius:10px;
+    border:2.5px solid var(--dancheong-red);
+    color:var(--dancheong-red);
+    display:flex;align-items:center;justify-content:center;
+    font-family:"Gowun Batang",serif;font-weight:700;font-size:13px;line-height:1.1;text-align:center;
+    transform:rotate(-3deg);
+    box-shadow:inset 0 0 0 2px rgba(179,51,31,.18);
+  }
+  header.top{display:flex;align-items:center;gap:14px;padding:14px 0 18px}
+  header.top h1{font-family:"Gowun Batang",serif;font-size:21px;margin:0;font-weight:700;letter-spacing:-.5px}
+  header.top p{margin:2px 0 0;font-size:12.5px;color:var(--ink-soft)}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .pad{padding:22px}
+  /* 화면 전환 */
+  .screen{display:none}
+  .screen.active{display:block}
+  /* 설정/로그인 공통 */
+  .center-card{max-width:420px;margin:6vh auto 0}
+  label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--ink)}
+  .hint{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-top:4px}
+  input[type=text],input[type=password],input[type=number],input[type=date],input[type=tel],select{
+    width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;
+    background:#fff;font-size:15px;font-family:inherit;color:var(--ink);
+  }
+  input:focus,select:focus{outline:2px solid var(--dancheong-blue);outline-offset:1px;border-color:transparent}
+  .pin-input{letter-spacing:10px;text-align:center;font-size:24px;font-weight:700}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-weight:700}
+  .btn{width:100%;padding:14px;background:var(--ink);color:#fff;font-size:15px;margin-top:18px}
+  .btn:hover{background:#000}
+  .btn-blue{background:var(--dancheong-blue)}
+  .btn-blue:hover{filter:brightness(1.06)}
+  .btn-ghost{background:transparent;color:var(--ink-soft);font-size:13px;margin-top:10px;padding:8px;width:100%}
+  .btn-ghost:hover{color:var(--ink)}
+  .btn-sm{padding:9px 14px;font-size:13px;width:auto;margin:0}
+  /* 탭 */
+  nav.tabs{display:flex;gap:6px;background:var(--hanji-2);padding:5px;border-radius:12px;border:1px solid var(--line);margin-bottom:18px}
+  nav.tabs button{flex:1;padding:11px 6px;background:transparent;color:var(--ink-soft);font-size:13.5px;border-radius:9px}
+  nav.tabs button.on{background:var(--paper);color:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.06)}
+  /* 쿠폰 안내 */
+  .tier-row{display:flex;gap:12px;margin:4px 0 8px}
+  .tier{flex:1;border:1.5px dashed var(--line);border-radius:12px;padding:14px;text-align:center;background:#fff;position:relative}
+  .tier b{display:block;font-size:12px;color:var(--ink-soft);font-weight:500}
+  .tier .amt{font-family:"Gowun Batang",serif;font-size:22px;font-weight:700;margin-top:4px}
+  .tier.t5 .amt{color:var(--dancheong-blue)}
+  .tier.t10 .amt{color:var(--dancheong-red)}
+  /* 동의 */
+  .consent{display:flex;gap:10px;align-items:flex-start;margin-top:18px;background:var(--hanji-2);padding:13px;border-radius:10px}
+  .consent input{margin-top:3px;width:18px;height:18px;flex:0 0 18px}
+  .consent label{margin:0;font-weight:500;font-size:12.5px;color:var(--ink-soft)}
+  details.terms{margin-top:8px;font-size:12px;color:var(--ink-soft)}
+  details.terms summary{cursor:pointer;color:var(--dancheong-blue);font-weight:600}
+  /* 결과 토스트 */
+  .result{margin-top:16px;padding:16px;border-radius:12px;font-size:14px;display:none;animation:pop .25s ease}
+  @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .result.show{display:block}
+  .result.ok{background:#e9f3f1;border:1px solid var(--dancheong-blue);color:#14524e}
+  .result.dup{background:#f7e7e3;border:1px solid var(--dancheong-red);color:#7e2516}
+  .result .big{font-family:"Gowun Batang",serif;font-size:20px;font-weight:700;display:block;margin-bottom:4px}
+  /* 통계 */
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
+  .stat .k{font-size:12px;color:var(--ink-soft)}
+  .stat .v{font-family:"Gowun Batang",serif;font-size:26px;font-weight:700;margin-top:3px}
+  .stat.total{grid-column:1/-1;background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .stat.total .k{color:#cfc8ba}
+  .stat.total .v{color:#fff;font-size:30px}
+  .stat .sub{font-size:11.5px;color:var(--dancheong-gold);margin-top:2px}
+  /* 데이터 표 */
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .toolbar .grow{flex:1;min-width:120px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line)}
+  th{font-size:11.5px;color:var(--ink-soft);font-weight:700;background:var(--hanji-2)}
+  td .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+  .pill5{background:#e9f3f1;color:var(--dancheong-blue)}
+  .pill10{background:#f7e7e3;color:var(--dancheong-red)}
+  .del{background:none;color:var(--ink-soft);font-size:12px;padding:4px 6px;width:auto;margin:0}
+  .del:hover{color:var(--dancheong-red)}
+  .empty{text-align:center;padding:36px 10px;color:var(--ink-soft);font-size:13px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .logout{background:none;color:var(--ink-soft);font-size:12px;padding:6px 10px;width:auto;margin:0}
+  code{background:var(--hanji-2);padding:2px 6px;border-radius:5px;font-size:12px}
+  pre{background:#2b2a26;color:#e9e3d6;padding:14px;border-radius:10px;overflow:auto;font-size:12px;line-height:1.5}
+  .note{font-size:12.5px;color:var(--ink-soft);background:var(--hanji-2);padding:12px;border-radius:10px;margin-top:12px}
+  .err{color:var(--dancheong-red);font-size:12.5px;margin-top:8px;font-weight:600;min-height:16px}
+  @media(max-width:480px){
+    .tier-row{flex-direction:column}
+    header.top h1{font-size:18px}
+    th:nth-child(2),td:nth-child(2){display:none} /* 좁은 화면: 생년월일 숨김 */
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="seal">페이<br>백</div>
+    <div>
+      <h1>전통시장 페이백 행사</h1>
+      <p id="marketName">상품권 지급 접수 · 관리 시스템</p>
+    </div>
+  </header>
+
+  <!-- ===== 0. 설정 안내 화면 ===== -->
+  <section id="setupScreen" class="screen">
+    <div class="card pad">
+      <h2 style="font-family:'Gowun Batang',serif;margin-top:0">초기 설정이 필요합니다</h2>
+      <p style="font-size:13.5px;color:var(--ink-soft)">아래 <code>CONFIG</code> 영역에 Firebase 정보를 입력한 뒤 GitHub에 올려 주세요. 설정 방법은 화면 맨 아래 안내를 참고하세요.</p>
+      <div class="note">파일 상단의 <code>FIREBASE_CONFIG</code> 값이 아직 예시(<code>여기에...</code>) 상태입니다. 실제 값으로 바꾸면 이 화면 대신 로그인 화면이 나타납니다.</div>
+    </div>
+  </section>
+
+  <!-- ===== 1. 로그인 화면 ===== -->
+  <section id="loginScreen" class="screen">
+    <div class="card pad center-card">
+      <h2 style="font-family:'Gowun Batang',serif;margin:0 0 4px;text-align:center">관리자 로그인</h2>
+      <p style="text-align:center;font-size:12.5px;color:var(--ink-soft);margin-top:0">이메일과 비밀번호를 입력하세요</p>
+      <label for="emailInput">이메일</label>
+      <input id="emailInput" type="email" inputmode="email" placeholder="operator@example.com" autocomplete="username" />
+      <label for="pwInput">비밀번호</label>
+      <input id="pwInput" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" />
+      <div id="loginErr" class="err"></div>
+      <button id="loginBtn" class="btn btn-blue">로그인</button>
+      <button id="setupPinBtn" class="btn-ghost">처음이신가요? 관리자 계정 등록하기</button>
+    </div>
+  </section>
+
+  <!-- ===== 2. 메인 앱 ===== -->
+  <section id="appScreen" class="screen">
+    <div class="topbar">
+      <span style="font-size:12px;color:var(--ink-soft)">● 연결됨 · 실시간 동기화</span>
+      <button id="logoutBtn" class="logout">로그아웃</button>
+    </div>
+    <nav class="tabs">
+      <button data-tab="entry" class="on">신청 접수</button>
+      <button data-tab="stats">집계 현황</button>
+      <button data-tab="data">데이터 관리</button>
+    </nav>
+
+    <!-- 탭1: 접수 -->
+    <div id="tab-entry" class="tabpane">
+      <div class="card pad">
+        <div class="tier-row">
+          <div class="tier t5"><b>3만원 이상 구매</b><span class="amt">5,000원</span></div>
+          <div class="tier t10"><b>5만원 이상 구매</b><span class="amt">10,000원</span></div>
+        </div>
+
+        <label for="fDate">신청일자</label>
+        <input id="fDate" type="date" />
+
+        <label for="fName">이름</label>
+        <input id="fName" type="text" placeholder="홍길동" autocomplete="off" />
+
+        <label for="fBirth">생년월일</label>
+        <input id="fBirth" type="date" />
+
+        <label for="fPhone">휴대폰 번호</label>
+        <input id="fPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="off" />
+
+        <label for="fAmount">구매금액 (원)</label>
+        <input id="fAmount" type="number" inputmode="numeric" placeholder="예: 35000" min="0" />
+        <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
+
+        <div class="consent">
+          <input id="fConsent" type="checkbox" />
+          <label for="fConsent">개인정보 수집·이용에 동의합니다. (상품권 지급 및 중복 확인 목적)</label>
+        </div>
+        <details class="terms">
+          <summary>수집 항목 및 안내 보기</summary>
+          <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 구매금액<br>
+             • 이용 목적: 페이백 상품권 지급 및 1인 1회 중복 지급 방지<br>
+             • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
+             • 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.</p>
+        </details>
+
+        <button id="submitBtn" class="btn btn-blue">지급 접수하기</button>
+        <div id="entryResult" class="result"></div>
+      </div>
+    </div>
+
+    <!-- 탭2: 통계 -->
+    <div id="tab-stats" class="tabpane" style="display:none">
+      <div class="card pad">
+        <div class="toolbar">
+          <select id="statScope" class="grow">
+            <option value="day">선택한 날짜</option>
+            <option value="all">전체 기간</option>
+          </select>
+          <input id="statDate" type="date" class="grow" />
+        </div>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">신청 인원</div><div class="v" id="sCount">0</div><div class="sub">명</div></div>
+          <div class="stat"><div class="k">총 지급액</div><div class="v" id="sTopTotal">0</div><div class="sub">원</div></div>
+          <div class="stat"><div class="k">5천원 상품권</div><div class="v" id="s5cnt">0<span style="font-size:14px">장</span></div><div class="sub" id="s5sum">0원</div></div>
+          <div class="stat"><div class="k">1만원 상품권</div><div class="v" id="s10cnt">0<span style="font-size:14px">장</span></div><div class="sub" id="s10sum">0원</div></div>
+          <div class="stat total"><div class="k">총 지급 금액 합계</div><div class="v" id="sTotal">0원</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 탭3: 데이터 -->
+    <div id="tab-data" class="tabpane" style="display:none">
+      <div class="card pad">
+        <div class="toolbar">
+          <input id="search" type="text" placeholder="이름·전화번호 검색" class="grow" />
+          <input id="dataDate" type="date" />
+          <button id="exportBtn" class="btn-sm btn-blue" style="color:#fff">엑셀 내보내기</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>일자</th><th>생년월일</th><th>이름</th><th>연락처</th><th>금액</th><th>쿠폰</th><th></th></tr></thead>
+            <tbody id="dataBody"></tbody>
+          </table>
+        </div>
+        <div id="dataEmpty" class="empty">접수된 데이터가 없습니다.</div>
+        <div class="note">표에서는 개인정보 보호를 위해 이름·연락처 일부가 가려집니다. 엑셀 내보내기에는 전체 정보가 포함되니 취급에 유의하세요.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 설정 안내(접힘) -->
+  <details class="terms" style="margin-top:26px;font-size:12.5px">
+    <summary>Firebase · GitHub 연동 설정 방법 보기</summary>
+    <div style="margin-top:10px;color:var(--ink-soft);line-height:1.7">
+      <b>1) Firebase 프로젝트 만들기</b><br>
+      console.firebase.google.com → 프로젝트 생성 → <b>Firestore Database</b> 사용 설정(프로덕션 모드) → <b>Authentication</b>에서 <b>이메일/비밀번호</b> 로그인 사용 설정.<br><br>
+      <b>2) 웹 앱 등록 후 설정값 복사</b><br>
+      프로젝트 설정 → 내 앱 → 웹(&lt;/&gt;) 추가 → <code>firebaseConfig</code> 값을 이 파일 상단 <code>FIREBASE_CONFIG</code>에 붙여넣기.<br><br>
+      <b>3) Firestore 보안 규칙</b> (로그인한 관리자만 읽기·쓰기 가능):
+      <pre>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /applications/{doc} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}</pre>
+      <b>4) GitHub Pages 배포</b><br>
+      이 파일을 <code>index.html</code>로 저장소에 올리고 Settings → Pages에서 배포. 배포 주소를 Firebase Authentication → 설정 → <b>승인된 도메인</b>에 추가.<br><br>
+      <b>5) 최초 실행</b> 시 “관리자 계정 등록하기”로 이메일과 비밀번호(6자 이상)를 한 번만 등록하면, 이후 같은 이메일·비밀번호로 로그인합니다.
+    </div>
+  </details>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ===================================================================
+   CONFIG ─ Firebase 콘솔의 firebaseConfig 값을 여기에 붙여넣으세요.
+   =================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAkCCCnAs89gwyZgTW0TJ4YYoLjzrUpJn4",
+  authDomain: "payback-d0b59.firebaseapp.com",
+  projectId: "payback-d0b59",
+  storageBucket: "payback-d0b59.firebasestorage.app",
+  messagingSenderId: "662634472975",
+  appId: "1:662634472975:web:813a64bdb9e4b87bd9a57a"
+};
+const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
+const MARKET_NAME = "문창백년전통시장";            // 화면 표기용(자유 변경)
+/* =================================================================== */
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const won = n => Number(n||0).toLocaleString("ko-KR");
+const show = id => { document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $(id).classList.add("active"); };
+
+document.getElementById("marketName").textContent = MARKET_NAME + " · 상품권 지급 접수";
+
+// 설정 미완료 감지
+if (FIREBASE_CONFIG.apiKey.startsWith("여기에")) {
+  show("setupScreen");
+} else {
+  startApp();
+}
+
+function startApp(){
+  const app = initializeApp(FIREBASE_CONFIG);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const col = collection(db, "applications");
+
+  let records = [];     // 실시간 캐시
+  let unsub = null;
+
+  /* ---------- 인증 ---------- */
+  onAuthStateChanged(auth, user => {
+    if (user) { show("appScreen"); subscribe(); todayDefaults(); }
+    else { show("loginScreen"); if (unsub) unsub(); }
+  });
+
+  $("loginBtn").onclick = async () => {
+    const email = $("emailInput").value.trim();
+    const pw = $("pwInput").value;
+    $("loginErr").textContent = "";
+    if (!email || !pw) { $("loginErr").textContent = "이메일과 비밀번호를 입력하세요."; return; }
+    try { await signInWithEmailAndPassword(auth, email, pw); }
+    catch(e){
+      $("loginErr").textContent = (e.code==="auth/invalid-credential" || e.code==="auth/wrong-password" || e.code==="auth/user-not-found")
+        ? "이메일 또는 비밀번호가 올바르지 않습니다." : "로그인 실패: " + e.code;
+    }
+  };
+  $("setupPinBtn").onclick = async () => {
+    const email = $("emailInput").value.trim();
+    const pw = $("pwInput").value;
+    $("loginErr").textContent = "";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("loginErr").textContent = "올바른 이메일 형식을 입력하세요."; return; }
+    if (pw.length < 6) { $("loginErr").textContent = "비밀번호는 6자 이상이어야 합니다."; return; }
+    try { await createUserWithEmailAndPassword(auth, email, pw); }
+    catch(e){
+      $("loginErr").textContent = (e.code==="auth/email-already-in-use")
+        ? "이미 등록된 이메일입니다. 로그인하세요." : "등록 실패: " + e.code;
+    }
+  };
+  $("pwInput").addEventListener("keydown", e=>{ if(e.key==="Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = ()=> signOut(auth);
+
+  /* ---------- 실시간 구독 ---------- */
+  function subscribe(){
+    const q = query(col, orderBy("createdAt","desc"));
+    unsub = onSnapshot(q, snap => {
+      records = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      renderStats(); renderData();
+    });
+  }
+
+  /* ---------- 탭 전환 ---------- */
+  document.querySelectorAll("nav.tabs button").forEach(b=>{
+    b.onclick = ()=>{
+      document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      document.querySelectorAll(".tabpane").forEach(p=>p.style.display="none");
+      $("tab-"+b.dataset.tab).style.display="block";
+    };
+  });
+
+  /* ---------- 기본값 ---------- */
+  function todayDefaults(){
+    const t = new Date().toISOString().slice(0,10);
+    $("fDate").value = t; $("statDate").value = t; $("dataDate").value = "";
+  }
+
+  /* ---------- 쿠폰 판정 ---------- */
+  const couponFor = amt => amt>=50000 ? 10000 : amt>=30000 ? 5000 : 0;
+
+  $("fAmount").addEventListener("input", ()=>{
+    const c = couponFor(Number($("fAmount").value));
+    const el = $("couponPreview");
+    if (c===0) el.innerHTML = "3만원 이상 구매 시 상품권이 지급됩니다.";
+    else el.innerHTML = `지급 예정: <b style="color:${c===10000?'var(--dancheong-red)':'var(--dancheong-blue)'}">${won(c)}원 상품권</b>`;
+  });
+
+  /* ---------- 중복키 ---------- */
+  async function makeDupKey(name, birth, phone){
+    const raw = name.replace(/\s/g,"") + "|" + birth + "|" + phone.replace(/\D/g,"");
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+
+  /* ---------- 접수 ---------- */
+  $("submitBtn").onclick = async () => {
+    const r = $("entryResult"); r.className="result";
+    const name = $("fName").value.trim();
+    const birth = $("fBirth").value;
+    const phoneRaw = $("fPhone").value.replace(/\D/g,"");
+    const amount = Number($("fAmount").value);
+    const date = $("fDate").value;
+
+    if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
+    if (!/^01\d{8,9}$/.test(phoneRaw)){ toast(r,"warn","전화번호 확인","올바른 휴대폰 번호를 입력하세요."); return; }
+    if (!$("fConsent").checked){ toast(r,"warn","동의 필요","개인정보 수집·이용에 동의해야 접수할 수 있습니다."); return; }
+
+    const coupon = couponFor(amount);
+    if (coupon===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
+
+    const dupKey = await makeDupKey(name, birth, phoneRaw);
+    if (records.some(x => x.dupKey === dupKey)){
+      r.className="result dup show";
+      r.innerHTML = `<span class="big">⚠ 이미 지급된 신청자입니다</span>이름·생년월일·전화번호가 일치하는 신청 내역이 있어 <b>중복 지급할 수 없습니다.</b>`;
+      return;
+    }
+
+    $("submitBtn").disabled = true;
+    try{
+      await addDoc(col, { date, name, birth, phone:phoneRaw, amount, coupon, dupKey, createdAt: serverTimestamp() });
+      r.className="result ok show";
+      r.innerHTML = `<span class="big">✔ ${won(coupon)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)`;
+      ["fName","fBirth","fPhone","fAmount"].forEach(id=>$(id).value="");
+      $("fConsent").checked=false; $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
+      $("fName").focus();
+    }catch(e){ toast(r,"warn","저장 실패","네트워크/권한 오류: "+ e.code); }
+    finally{ $("submitBtn").disabled=false; }
+  };
+  function toast(el,kind,title,msg){ el.className="result "+(kind==="warn"?"dup":"ok")+" show"; el.innerHTML=`<span class="big">${esc(title)}</span>${esc(msg)}`; }
+
+  /* ---------- 통계 ---------- */
+  function statsSource(){
+    const scope = $("statScope").value;
+    if (scope==="all") return records;
+    const d = $("statDate").value;
+    return records.filter(r=>r.date===d);
+  }
+  function renderStats(){
+    const rows = statsSource();
+    const c5 = rows.filter(r=>r.coupon===5000).length;
+    const c10 = rows.filter(r=>r.coupon===10000).length;
+    const sum5 = c5*5000, sum10 = c10*10000, total = sum5+sum10;
+    $("sCount").textContent = rows.length;
+    $("sTopTotal").textContent = won(total);
+    $("s5cnt").innerHTML = c5+'<span style="font-size:14px">장</span>';
+    $("s10cnt").innerHTML = c10+'<span style="font-size:14px">장</span>';
+    $("s5sum").textContent = won(sum5)+"원";
+    $("s10sum").textContent = won(sum10)+"원";
+    $("sTotal").textContent = won(total)+"원";
+  }
+  $("statScope").onchange = ()=>{ $("statDate").style.display = $("statScope").value==="all"?"none":""; renderStats(); };
+  $("statDate").onchange = renderStats;
+
+  /* ---------- 데이터 관리 ---------- */
+  const maskName = n => n.length<=1 ? n : n[0]+"*".repeat(n.length-1);
+  const maskPhone = p => p.length>=10 ? p.slice(0,3)+"-****-"+p.slice(-4) : p;
+  function renderData(){
+    const kw = $("search").value.trim();
+    const fd = $("dataDate").value;
+    let rows = records;
+    if (fd) rows = rows.filter(r=>r.date===fd);
+    if (kw) rows = rows.filter(r=> r.name.includes(kw) || (r.phone||"").includes(kw.replace(/\D/g,"")));
+    const body = $("dataBody");
+    $("dataEmpty").style.display = rows.length? "none":"block";
+    body.innerHTML = rows.map(r=>`
+      <tr>
+        <td>${esc(r.date)}</td>
+        <td>${esc(r.birth||"")}</td>
+        <td>${esc(maskName(r.name))}</td>
+        <td>${esc(maskPhone(r.phone||""))}</td>
+        <td>${won(r.amount)}원</td>
+        <td><span class="pill ${r.coupon===10000?'pill10':'pill5'}">${won(r.coupon)}</span></td>
+        <td><button class="del" data-id="${r.id}" data-name="${esc(r.name)}">삭제</button></td>
+      </tr>`).join("");
+    body.querySelectorAll(".del").forEach(b=>{
+      b.onclick = async ()=>{
+        if(confirm(`${b.dataset.name} 님 내역을 삭제할까요? (되돌릴 수 없음)`))
+          await deleteDoc(doc(db,"applications",b.dataset.id));
+      };
+    });
+  }
+  $("search").oninput = renderData;
+  $("dataDate").onchange = renderData;
+
+  /* ---------- 엑셀 내보내기 ---------- */
+  $("exportBtn").onclick = ()=>{
+    const fd = $("dataDate").value;
+    const rows = (fd? records.filter(r=>r.date===fd): records);
+    if(!rows.length){ alert("내보낼 데이터가 없습니다."); return; }
+    const aoa = rows.map(r=>({
+      "신청일자": r.date, "이름": r.name, "생년월일": r.birth,
+      "휴대폰번호": (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
+      "구매금액": r.amount, "지급상품권": r.coupon
+    }));
+    const c5=rows.filter(r=>r.coupon===5000).length, c10=rows.filter(r=>r.coupon===10000).length;
+    aoa.push({});
+    aoa.push({"신청일자":"── 집계 ──"});
+    aoa.push({"신청일자":"신청 인원","이름":rows.length+"명"});
+    aoa.push({"신청일자":"5천원 상품권","이름":c5+"장","생년월일":won(c5*5000)+"원"});
+    aoa.push({"신청일자":"1만원 상품권","이름":c10+"장","생년월일":won(c10*10000)+"원"});
+    aoa.push({"신청일자":"총 지급액","이름":won(c5*5000+c10*10000)+"원"});
+    const ws = XLSX.utils.json_to_sheet(aoa);
+    ws["!cols"]=[{wch:12},{wch:10},{wch:12},{wch:16},{wch:10},{wch:10}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "페이백접수");
+    XLSX.writeFile(wb, `페이백_${fd||"전체"}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+}
+</script>
+</body>
+</html>
