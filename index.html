@@ -123,6 +123,8 @@
   .result.ok{background:#e9f3f1;border:1px solid var(--dancheong-blue);color:#14524e}
   .result.dup{background:#f7e7e3;border:1px solid var(--dancheong-red);color:#7e2516}
   .result .big{font-family:"Gowun Batang",serif;font-size:20px;font-weight:700;display:block;margin-bottom:4px}
+  .result .next-btn{margin-top:12px;background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700}
+  .result .next-btn:hover{background:#000}
   /* 통계 */
   .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
   .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
@@ -266,7 +268,10 @@
              • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
         </details>
 
-        <button id="submitBtn" class="btn btn-blue">지급 접수하기</button>
+        <div style="display:flex;gap:8px;margin-top:18px">
+          <button id="submitBtn" class="btn btn-blue" style="flex:1;margin-top:0">지급 접수하기</button>
+          <button id="resetBtn" class="btn" style="flex:0 0 auto;width:auto;margin-top:0;padding:14px 18px;background:var(--ink-soft)">초기화</button>
+        </div>
         <div id="entryResult" class="result"></div>
       </div>
     </div>
@@ -551,6 +556,21 @@ function startApp(){
     return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
   }
 
+  /* ---------- 폼 초기화 (다음 사람 입력) ---------- */
+  function resetForm(clearMsg){
+    ["fName","fPhone","fAmount","fAddress"].forEach(id=>$(id).value="");
+    clearBirth(); $("fDistrict").value="";
+    $("fConsent").checked=false; $("fMarketing").checked=false;
+    $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
+    $("historyBox").className="histbox"; $("historyBox").innerHTML="";
+    if (clearMsg){ const e=$("entryResult"); e.className="result"; e.innerHTML=""; }
+    $("fName").focus();
+    // 신청일자(날짜)는 같은 날 연속 접수를 위해 그대로 유지
+  }
+  $("resetBtn").onclick = ()=> resetForm(true);
+  // 경고/완료 메시지 안의 '다음 사람 입력' 버튼
+  $("entryResult").addEventListener("click", e=>{ if(e.target.closest(".next-btn")) resetForm(true); });
+
   /* ---------- 접수 ---------- */
   $("submitBtn").onclick = async () => {
     const r = $("entryResult"); r.className="result";
@@ -583,7 +603,7 @@ function startApp(){
     // 한도 초과 → 차단
     if (remaining <= 0){
       r.className="result dup show";
-      r.innerHTML = `<span class="big">⚠ 지급 한도 초과</span>이미 한도(<b>1만원</b>)를 모두 지급받으신 고객님입니다. (기존 수령 ${won(paid)}원)`;
+      r.innerHTML = `<span class="big">⚠ 지급 한도 초과</span>이미 한도(<b>1만원</b>)를 모두 지급받으신 고객님입니다. (기존 수령 ${won(paid)}원)<br><button class="next-btn">다음 사람 입력 ▶</button>`;
       return;
     }
     const grant = Math.min(tier, remaining);             // 남은 한도까지만 지급
@@ -603,9 +623,7 @@ function startApp(){
         note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 한도(1만원)에 도달하여 이후에는 지급되지 않습니다.</span>`;
       }
       r.innerHTML = `<span class="big">✔ ${won(grant)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)${note}`;
-      ["fName","fPhone","fAmount","fAddress"].forEach(id=>$(id).value=""); clearBirth(); $("fDistrict").value="";
-      $("fConsent").checked=false; $("fMarketing").checked=false; $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다."; $("historyBox").className="histbox";
-      $("fName").focus();
+      resetForm(false);   // 입력값만 비우고 위 완료 메시지는 유지
     }catch(e){ toast(r,"warn","저장 실패","네트워크/권한 오류: "+ e.code); }
     finally{ $("submitBtn").disabled=false; }
   };
