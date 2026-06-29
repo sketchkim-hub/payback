@@ -67,6 +67,21 @@
   }
   input:focus,select:focus{outline:2px solid var(--dancheong-blue);outline-offset:1px;border-color:transparent}
   .pin-input{letter-spacing:10px;text-align:center;font-size:24px;font-weight:700}
+  /* 생년월일 세그먼트 입력 */
+  .datefield{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:3px 12px}
+  .datefield:focus-within{outline:2px solid var(--dancheong-blue);outline-offset:1px;border-color:transparent}
+  .datefield .seg{border:none;outline:none;background:transparent;padding:9px 2px;font-size:15px;text-align:center;color:var(--ink);font-family:inherit}
+  .datefield #bY{width:60px}
+  .datefield #bM,.datefield #bD{width:40px}
+  .datefield .sep{color:var(--ink-soft);font-weight:600}
+  /* 구별 막대그래프 */
+  .barchart{margin:6px 0 4px;display:flex;flex-direction:column;gap:9px}
+  .bar-row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  .bar-label{flex:0 0 52px;text-align:right;font-weight:700;color:var(--ink)}
+  .bar-track{flex:1;background:var(--hanji-2);border-radius:7px;height:24px;position:relative;overflow:hidden}
+  .bar-fill{height:100%;border-radius:7px;min-width:3px;transition:width .5s ease}
+  .bar-val{flex:0 0 auto;color:var(--ink-soft);font-size:11.5px;white-space:nowrap}
+  .bar-val b{color:var(--ink)}
   button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-weight:700}
   .btn{width:100%;padding:14px;background:var(--ink);color:#fff;font-size:15px;margin-top:18px}
   .btn:hover{background:#000}
@@ -193,11 +208,31 @@
         <label for="fName">이름</label>
         <input id="fName" type="text" placeholder="홍길동" autocomplete="off" />
 
-        <label for="fBirth">생년월일</label>
-        <input id="fBirth" type="date" />
+        <label for="bY">생년월일</label>
+        <div class="datefield">
+          <input id="bY" class="seg" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" autocomplete="off" />
+          <span class="sep">-</span>
+          <input id="bM" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="off" />
+          <span class="sep">-</span>
+          <input id="bD" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="DD" autocomplete="off" />
+        </div>
 
         <label for="fPhone">휴대폰 번호</label>
         <input id="fPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="off" />
+
+        <label for="fDistrict">거주 지역 (구)</label>
+        <select id="fDistrict">
+          <option value="">구 선택</option>
+          <option value="동구">동구</option>
+          <option value="중구">중구</option>
+          <option value="서구">서구</option>
+          <option value="유성구">유성구</option>
+          <option value="대덕구">대덕구</option>
+          <option value="그 외">그 외 (타지역)</option>
+        </select>
+
+        <label for="fAddress">상세주소 <span style="font-weight:400;color:var(--ink-soft)">(선택)</span></label>
+        <input id="fAddress" type="text" placeholder="예: ○○동 ○○아파트" autocomplete="off" />
 
         <label for="fAmount">구매금액 (원)</label>
         <input id="fAmount" type="number" inputmode="numeric" placeholder="예: 35000" min="0" />
@@ -209,8 +244,9 @@
         </div>
         <details class="terms">
           <summary>수집 항목 및 안내 보기</summary>
-          <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 구매금액<br>
-             • 이용 목적: 페이백 상품권 지급 및 1인 1회 중복 지급 방지<br>
+          <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
+             • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
+             • 지급 기준: 1인 누적 1만원 한도 내 지급 (남은 한도까지만 지급, 한도 도달 시 종료)<br>
              • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
              • 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.</p>
         </details>
@@ -237,6 +273,14 @@
           <div class="stat"><div class="k">1만원 상품권</div><div class="v" id="s10cnt">0<span style="font-size:14px">장</span></div><div class="sub" id="s10sum">0원</div></div>
           <div class="stat total"><div class="k">총 지급 금액 합계</div><div class="v" id="sTotal">0원</div></div>
         </div>
+        <h3 style="font-family:'Gowun Batang',serif;font-size:15px;margin:22px 0 10px">구별 집계</h3>
+        <div id="districtChart" class="barchart"></div>
+        <div style="overflow-x:auto;margin-top:14px">
+          <table>
+            <thead><tr><th>거주 지역</th><th style="text-align:right">인원</th><th style="text-align:right">5천원</th><th style="text-align:right">1만원</th><th style="text-align:right">지급액</th></tr></thead>
+            <tbody id="districtBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -245,12 +289,21 @@
       <div class="card pad">
         <div class="toolbar">
           <input id="search" type="text" placeholder="이름·전화번호 검색" class="grow" />
+          <select id="dataDistrict">
+            <option value="">전체 지역</option>
+            <option value="동구">동구</option>
+            <option value="중구">중구</option>
+            <option value="서구">서구</option>
+            <option value="유성구">유성구</option>
+            <option value="대덕구">대덕구</option>
+            <option value="그 외">그 외</option>
+          </select>
           <input id="dataDate" type="date" />
           <button id="exportBtn" class="btn-sm btn-blue" style="color:#fff">엑셀 내보내기</button>
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>일자</th><th>생년월일</th><th>이름</th><th>연락처</th><th>금액</th><th>쿠폰</th><th></th></tr></thead>
+            <thead><tr><th>일자</th><th>생년월일</th><th>이름</th><th>지역</th><th>연락처</th><th>금액</th><th>쿠폰</th><th></th></tr></thead>
             <tbody id="dataBody"></tbody>
           </table>
         </div>
@@ -304,6 +357,7 @@ const FIREBASE_CONFIG = {
 };
 const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
 const MARKET_NAME = "문창백년전통시장";            // 화면 표기용(자유 변경)
+const PAYOUT_CAP = 10000;                         // 1인당 전체 행사 기간 누적 지급 한도(원)
 /* =================================================================== */
 
 const $ = id => document.getElementById(id);
@@ -386,15 +440,72 @@ function startApp(){
     $("fDate").value = t; $("statDate").value = t; $("dataDate").value = "";
   }
 
+  /* ---------- 생년월일 세그먼트(자동 이동) ---------- */
+  const bY=$("bY"), bM=$("bM"), bD=$("bD");
+  const digits = el => { el.value = el.value.replace(/\D/g,""); };
+  bY.addEventListener("input", ()=>{ digits(bY); if(bY.value.length>=4) bM.focus(); });
+  bM.addEventListener("input", ()=>{ digits(bM); if(+bM.value>12) bM.value=bM.value.slice(0,1);
+    if(bM.value.length>=2 || /^[2-9]$/.test(bM.value)) bD.focus(); });
+  bD.addEventListener("input", ()=>{ digits(bD); if(+bD.value>31) bD.value=bD.value.slice(0,1); });
+  bM.addEventListener("keydown", e=>{ if(e.key==="Backspace"&&bM.value==="") bY.focus(); });
+  bD.addEventListener("keydown", e=>{ if(e.key==="Backspace"&&bD.value==="") bM.focus(); });
+  bD.addEventListener("keydown", e=>{ if(e.key==="Enter") $("fPhone").focus(); });
+  function getBirth(){
+    const y=bY.value, m=bM.value, d=bD.value;
+    if(y.length!==4 || !m || !d) return "";           // 미입력
+    const iso = `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+    const dt = new Date(iso);
+    if(dt.getFullYear()!=+y || dt.getMonth()+1!=+m || dt.getDate()!=+d) return "INVALID";
+    return iso;
+  }
+  function clearBirth(){ bY.value=bM.value=bD.value=""; }
+
   /* ---------- 쿠폰 판정 ---------- */
   const couponFor = amt => amt>=50000 ? 10000 : amt>=30000 ? 5000 : 0;
 
-  $("fAmount").addEventListener("input", ()=>{
-    const c = couponFor(Number($("fAmount").value));
+  /* ---------- 지급액 미리보기 (이름+생년월일 입력 시 한도 반영) ---------- */
+  const norm = s => String(s||"").replace(/\s/g,"");
+  function priorPaidFor(name, birth, phone){
+    // 전체 기간 누적: 이름·생년월일 일치(전화번호 입력 시 함께 대조)
+    const m = records.filter(x => norm(x.name)===norm(name) && x.birth===birth && (phone? x.phone===phone : true));
+    return { paid: m.reduce((s,x)=>s+(x.coupon||0),0), matched: m.length };
+  }
+  function updatePreview(){
     const el = $("couponPreview");
-    if (c===0) el.innerHTML = "3만원 이상 구매 시 상품권이 지급됩니다.";
-    else el.innerHTML = `지급 예정: <b style="color:${c===10000?'var(--dancheong-red)':'var(--dancheong-blue)'}">${won(c)}원 상품권</b>`;
-  });
+    const amount = Number($("fAmount").value);
+    const tier = couponFor(amount);
+    const name = $("fName").value.trim();
+    const birth = getBirth();
+    const phone = $("fPhone").value.replace(/\D/g,"");
+    const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
+
+    if (!amount){ el.innerHTML = "금액을 입력하면 지급될 상품권이 표시됩니다."; return; }
+    if (tier===0){ el.innerHTML = `3만원 이상 구매 시 상품권이 지급됩니다. (입력: ${won(amount)}원)`; return; }
+
+    // 이름+생년월일이 있으면 누적 한도 반영
+    if (name && birth && birth!=="INVALID"){
+      const { paid, matched } = priorPaidFor(name, birth, phone);
+      const remaining = PAYOUT_CAP - paid;
+      if (remaining<=0){
+        el.innerHTML = `<b style="color:${col10}">지급 한도(${won(PAYOUT_CAP)}원) 초과</b> · 기존 ${won(paid)}원 수령 → 추가 지급 불가`;
+        return;
+      }
+      const grant = Math.min(tier, remaining);
+      const tag = (!phone && matched>0) ? ` <span style="color:var(--ink-soft)">(전화번호 입력 시 확정)</span>` : "";
+      if (paid>0){
+        el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원</b>`
+          + ` <span style="color:var(--ink-soft)">· 기존 ${won(paid)}원 / 잔여한도 ${won(remaining)}원</span>${tag}`;
+      } else {
+        el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원 상품권</b>${tag}`;
+      }
+      return;
+    }
+    // 이름/생년월일 아직 → 구매금액 기준 금액만
+    el.innerHTML = `지급 예정: <b style="color:${tier>=10000?col10:col5}">${won(tier)}원 상품권</b>`
+      + ` <span style="color:var(--ink-soft)">(이름·생년월일 입력 시 한도 반영)</span>`;
+  }
+  ["fName","fPhone","fAmount"].forEach(id => $(id).addEventListener("input", updatePreview));
+  [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
 
   /* ---------- 중복키 ---------- */
   async function makeDupKey(name, birth, phone){
@@ -407,31 +518,52 @@ function startApp(){
   $("submitBtn").onclick = async () => {
     const r = $("entryResult"); r.className="result";
     const name = $("fName").value.trim();
-    const birth = $("fBirth").value;
+    const birth = getBirth();
     const phoneRaw = $("fPhone").value.replace(/\D/g,"");
+    const district = $("fDistrict").value;
+    const address = $("fAddress").value.trim();
     const amount = Number($("fAmount").value);
     const date = $("fDate").value;
 
     if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
+    if (birth==="INVALID"){ toast(r,"warn","생년월일 확인","생년월일이 올바르지 않습니다. (예: 1979 / 10 / 10)"); return; }
     if (!/^01\d{8,9}$/.test(phoneRaw)){ toast(r,"warn","전화번호 확인","올바른 휴대폰 번호를 입력하세요."); return; }
+    if (!district){ toast(r,"warn","지역 선택","거주 지역(구)을 선택하세요."); return; }
     if (!$("fConsent").checked){ toast(r,"warn","동의 필요","개인정보 수집·이용에 동의해야 접수할 수 있습니다."); return; }
 
-    const coupon = couponFor(amount);
-    if (coupon===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
+    const tier = couponFor(amount);
+    if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
 
     const dupKey = await makeDupKey(name, birth, phoneRaw);
-    if (records.some(x => x.dupKey === dupKey)){
+    const prior = records.filter(x => x.dupKey === dupKey);
+    const CAP = PAYOUT_CAP;                               // 1인 전체 기간 누적 지급 한도
+    const paid = prior.reduce((s,x)=> s + (x.coupon||0), 0);
+    const remaining = CAP - paid;
+
+    // 한도 초과 → 차단
+    if (remaining <= 0){
       r.className="result dup show";
-      r.innerHTML = `<span class="big">⚠ 이미 지급된 신청자입니다</span>이름·생년월일·전화번호가 일치하는 신청 내역이 있어 <b>중복 지급할 수 없습니다.</b>`;
+      r.innerHTML = `<span class="big">⚠ 지급 한도 초과</span>이미 한도(<b>1만원</b>)를 모두 지급받으신 고객님입니다. (기존 수령 ${won(paid)}원)`;
       return;
     }
+    const grant = Math.min(tier, remaining);             // 남은 한도까지만 지급
+    const capped = grant < tier;                         // 한도 때문에 깎였는지
 
     $("submitBtn").disabled = true;
     try{
-      await addDoc(col, { date, name, birth, phone:phoneRaw, amount, coupon, dupKey, createdAt: serverTimestamp() });
+      await addDoc(col, { date, name, birth, phone:phoneRaw, district, address, amount, coupon:grant, dupKey, createdAt: serverTimestamp() });
       r.className="result ok show";
-      r.innerHTML = `<span class="big">✔ ${won(coupon)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)`;
-      ["fName","fBirth","fPhone","fAmount"].forEach(id=>$(id).value="");
+      const totalNow = paid + grant;
+      let note = "";
+      if (capped){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 기존 ${won(paid)}원 수령 → 남은 한도만큼 <b>${won(grant)}원</b>만 지급 (누적 ${won(totalNow)}원, 한도 도달)</span>`;
+      } else if (paid>0){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-gold)">※ 기존 ${won(paid)}원 + 이번 ${won(grant)}원 = 누적 ${won(totalNow)}원${totalNow>=CAP?" (한도 도달)":` / 잔여 ${won(CAP-totalNow)}원`}</span>`;
+      } else if (totalNow>=CAP){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 한도(1만원)에 도달하여 이후에는 지급되지 않습니다.</span>`;
+      }
+      r.innerHTML = `<span class="big">✔ ${won(grant)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)${note}`;
+      ["fName","fPhone","fAmount","fAddress"].forEach(id=>$(id).value=""); clearBirth(); $("fDistrict").value="";
       $("fConsent").checked=false; $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
       $("fName").focus();
     }catch(e){ toast(r,"warn","저장 실패","네트워크/권한 오류: "+ e.code); }
@@ -458,6 +590,35 @@ function startApp(){
     $("s5sum").textContent = won(sum5)+"원";
     $("s10sum").textContent = won(sum10)+"원";
     $("sTotal").textContent = won(total)+"원";
+
+    // 구별 집계
+    const order = ["동구","중구","서구","유성구","대덕구","그 외"];
+    const map = {};
+    rows.forEach(r=>{
+      const g = r.district || "미지정";
+      (map[g] = map[g] || {n:0,c5:0,c10:0,sum:0});
+      map[g].n++;
+      if(r.coupon===5000) map[g].c5++; else if(r.coupon===10000) map[g].c10++;
+      map[g].sum += (r.coupon||0);
+    });
+    const keys = [...order.filter(k=>map[k]), ...Object.keys(map).filter(k=>!order.includes(k))];
+    const body = $("districtBody");
+    body.innerHTML = keys.length ? keys.map(k=>{
+      const d=map[k];
+      return `<tr><td><b>${esc(k)}</b></td><td style="text-align:right">${d.n}명</td><td style="text-align:right">${d.c5}장</td><td style="text-align:right">${d.c10}장</td><td style="text-align:right"><b>${won(d.sum)}원</b></td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="empty">데이터가 없습니다.</td></tr>`;
+
+    // 구별 막대그래프 (지급액 기준)
+    const palette = {"동구":"#1f6f6b","중구":"#b3331f","서구":"#c79a3c","유성구":"#2e7d8f","대덕구":"#8a6d3b","그 외":"#9a958b","미지정":"#bdb6a6"};
+    const maxSum = Math.max(1, ...keys.map(k=>map[k].sum));
+    $("districtChart").innerHTML = keys.length ? keys.map(k=>{
+      const d=map[k], w=Math.round(d.sum/maxSum*100), col=palette[k]||"#1f6f6b";
+      return `<div class="bar-row">
+        <span class="bar-label">${esc(k)}</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${w}%;background:${col}"></span></span>
+        <span class="bar-val"><b>${won(d.sum)}원</b> · ${d.n}명</span>
+      </div>`;
+    }).join("") : `<div class="empty" style="padding:14px">데이터가 없습니다.</div>`;
   }
   $("statScope").onchange = ()=>{ $("statDate").style.display = $("statScope").value==="all"?"none":""; renderStats(); };
   $("statDate").onchange = renderStats;
@@ -468,8 +629,10 @@ function startApp(){
   function renderData(){
     const kw = $("search").value.trim();
     const fd = $("dataDate").value;
+    const fg = $("dataDistrict").value;
     let rows = records;
     if (fd) rows = rows.filter(r=>r.date===fd);
+    if (fg) rows = rows.filter(r=>(r.district||"")===fg);
     if (kw) rows = rows.filter(r=> r.name.includes(kw) || (r.phone||"").includes(kw.replace(/\D/g,"")));
     const body = $("dataBody");
     $("dataEmpty").style.display = rows.length? "none":"block";
@@ -478,6 +641,7 @@ function startApp(){
         <td>${esc(r.date)}</td>
         <td>${esc(r.birth||"")}</td>
         <td>${esc(maskName(r.name))}</td>
+        <td>${esc(r.district||"-")}</td>
         <td>${esc(maskPhone(r.phone||""))}</td>
         <td>${won(r.amount)}원</td>
         <td><span class="pill ${r.coupon===10000?'pill10':'pill5'}">${won(r.coupon)}</span></td>
@@ -492,29 +656,42 @@ function startApp(){
   }
   $("search").oninput = renderData;
   $("dataDate").onchange = renderData;
+  $("dataDistrict").onchange = renderData;
 
   /* ---------- 엑셀 내보내기 ---------- */
   $("exportBtn").onclick = ()=>{
     const fd = $("dataDate").value;
-    const rows = (fd? records.filter(r=>r.date===fd): records);
+    const fg = $("dataDistrict").value;
+    let rows = records;
+    if (fd) rows = rows.filter(r=>r.date===fd);
+    if (fg) rows = rows.filter(r=>(r.district||"")===fg);
     if(!rows.length){ alert("내보낼 데이터가 없습니다."); return; }
     const aoa = rows.map(r=>({
       "신청일자": r.date, "이름": r.name, "생년월일": r.birth,
+      "거주구": r.district||"", "상세주소": r.address||"",
       "휴대폰번호": (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
       "구매금액": r.amount, "지급상품권": r.coupon
     }));
     const c5=rows.filter(r=>r.coupon===5000).length, c10=rows.filter(r=>r.coupon===10000).length;
     aoa.push({});
-    aoa.push({"신청일자":"── 집계 ──"});
+    aoa.push({"신청일자":"── 전체 집계 ──"});
     aoa.push({"신청일자":"신청 인원","이름":rows.length+"명"});
     aoa.push({"신청일자":"5천원 상품권","이름":c5+"장","생년월일":won(c5*5000)+"원"});
     aoa.push({"신청일자":"1만원 상품권","이름":c10+"장","생년월일":won(c10*10000)+"원"});
     aoa.push({"신청일자":"총 지급액","이름":won(c5*5000+c10*10000)+"원"});
+    // 구별 집계
+    aoa.push({});
+    aoa.push({"신청일자":"── 구별 집계 ──","이름":"인원","생년월일":"지급액"});
+    const order=["동구","중구","서구","유성구","대덕구","그 외"];
+    const gmap={}; rows.forEach(r=>{const k=r.district||"미지정"; gmap[k]=gmap[k]||{n:0,s:0}; gmap[k].n++; gmap[k].s+=(r.coupon||0);});
+    [...order.filter(k=>gmap[k]), ...Object.keys(gmap).filter(k=>!order.includes(k))].forEach(k=>{
+      aoa.push({"신청일자":k,"이름":gmap[k].n+"명","생년월일":won(gmap[k].s)+"원"});
+    });
     const ws = XLSX.utils.json_to_sheet(aoa);
-    ws["!cols"]=[{wch:12},{wch:10},{wch:12},{wch:16},{wch:10},{wch:10}];
+    ws["!cols"]=[{wch:12},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:10},{wch:10}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "페이백접수");
-    XLSX.writeFile(wb, `페이백_${fd||"전체"}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `페이백_${fd||"전체"}${fg?"_"+fg:""}_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 }
 </script>
