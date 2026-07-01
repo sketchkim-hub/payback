@@ -96,6 +96,9 @@
   body.is-master .mcol{display:table-cell}
   .mfilter{display:none}
   body.is-master .mfilter{display:inline-block}
+  .mblock{display:none}
+  body.is-master .mblock{display:block}
+  .danger-zone{margin-top:16px;border:1px solid var(--dancheong-red);border-radius:12px;padding:14px;background:#fbeae6}
   /* 접수 폼: 휴대폰=1열(기존과 동일), 태블릿·PC=2열 */
   .form-grid{display:contents}
   @media(min-width:700px){
@@ -392,6 +395,28 @@
         </div>
         <div id="dataEmpty" class="empty">접수된 데이터가 없습니다.</div>
         <div class="note">표에서는 개인정보 보호를 위해 이름·연락처 일부가 가려집니다. 엑셀 내보내기에는 전체 정보가 포함되니 취급에 유의하세요.</div>
+
+        <div class="mblock danger-zone">
+          <h4 style="margin:0 0 4px;font-size:14px;color:var(--dancheong-red)">기간 데이터 삭제 · 대표 전용</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px">되돌릴 수 없습니다. 삭제 전 엑셀 내보내기로 백업을 권장합니다.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <span style="font-size:12.5px;font-weight:700">월별</span>
+            <input id="delMonth" type="month" style="width:auto" />
+            <button id="delMonthBtn" class="btn-sm" style="background:var(--dancheong-red);color:#fff">이 달 삭제</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <span style="font-size:12.5px;font-weight:700">기간</span>
+            <input id="delFrom" type="date" style="width:auto" />
+            <span>~</span>
+            <input id="delTo" type="date" style="width:auto" />
+            <button id="delRangeBtn" class="btn-sm" style="background:var(--dancheong-red);color:#fff">이 기간 삭제</button>
+          </div>
+          <div style="border-top:1px dashed var(--line);padding-top:10px;margin-top:6px">
+            <button id="delAllBtn" class="btn-sm" style="background:#7e2516;color:#fff">전체 데이터 삭제</button>
+            <span style="font-size:11.5px;color:var(--ink-soft);margin-left:8px">모든 접수 기록을 삭제합니다.</span>
+          </div>
+          <div id="bulkMsg" class="err" style="margin-top:8px"></div>
+        </div>
       </div>
     </div>
 
@@ -1033,30 +1058,72 @@ function startApp(){
       b.onclick = async ()=>{
         if(!confirm(`${b.dataset.name} 님 내역을 삭제할까요? (되돌릴 수 없음)`)) return;
         const rec = records.find(x=>x.id===b.dataset.id);
-        const recRef = doc(db,"applications",b.dataset.id);
-        // 원장(누적)에서도 해당 금액을 차감하여 한도 계산을 정확히 유지
-        const lid = rec && (rec.ledgerId || (rec.dupKey ? "ledger_"+rec.dupKey+"_"+yearOf(rec.date) : null));
-        try{
-          await runTransaction(db, async (tx)=>{
-            if (lid){
-              const lref = doc(db,"applications",lid);
-              const ls = await tx.get(lref);
-              if (ls.exists()){
-                const p = Math.max(0, (ls.data().paid||0) - (rec.coupon||0));
-                tx.set(lref, { paid:p }, { merge:true });
-              }
-            }
-            tx.delete(recRef);
-          });
-        }catch(e){ alert("삭제 실패: "+(e.code||e.message||e)); }
+        try{ if(rec) await deleteOneRecord(rec); }
+        catch(e){ alert("삭제 실패: "+(e.code||e.message||e)); }
       };
     });
+  }
+
+  /* ---------- 삭제 (원장 차감 포함) ---------- */
+  function deleteOneRecord(rec){
+    const lid = rec.ledgerId || (rec.dupKey ? "ledger_"+rec.dupKey+"_"+yearOf(rec.date) : null);
+    return runTransaction(db, async (tx)=>{
+      if (lid){
+        const lref = doc(db,"applications",lid);
+        const ls = await tx.get(lref);
+        if (ls.exists()){
+          const p = Math.max(0, (ls.data().paid||0) - (rec.coupon||0));
+          tx.set(lref, { paid:p }, { merge:true });
+        }
+      }
+      tx.delete(doc(db,"applications",rec.id));
+    });
+  }
+  async function bulkDelete(targets, label){
+    if (!isMaster){ alert("일괄 삭제는 대표 관리자만 할 수 있습니다."); return; }
+    if (!targets.length){ alert("삭제할 데이터가 없습니다."); return; }
+    if (!confirm(`${label}\n총 ${targets.length}건을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?`)) return;
+    const btns = document.querySelectorAll("#delMonthBtn,#delRangeBtn,#delAllBtn");
+    btns.forEach(b=>b.disabled=true);
+    let done=0, fail=0;
+    const CH = 15;                                   // 15건씩 병렬 처리
+    for (let i=0;i<targets.length;i+=CH){
+      const chunk = targets.slice(i,i+CH);
+      const res = await Promise.allSettled(chunk.map(r=>deleteOneRecord(r)));
+      done += res.filter(x=>x.status==="fulfilled").length;
+      fail += res.filter(x=>x.status==="rejected").length;
+      $("bulkMsg").textContent = `삭제 중… ${done}/${targets.length}`;
+    }
+    btns.forEach(b=>b.disabled=false);
+    $("bulkMsg").style.color = fail? "var(--dancheong-red)":"var(--dancheong-blue)";
+    $("bulkMsg").textContent = `삭제 완료: ${done}건${fail?` (실패 ${fail}건)`:""}`;
   }
   $("search").oninput = renderData;
   $("dataDate").onchange = renderData;
   $("dataDistrict").onchange = renderData;
   $("dataYear").onchange = renderData;
   $("dataOperator").onchange = renderData;
+
+  /* ---------- 기간/전체 일괄 삭제 (대표 전용) ---------- */
+  $("delMonthBtn").onclick = ()=>{
+    const m = $("delMonth").value;                 // "YYYY-MM"
+    if(!m){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="삭제할 월을 선택하세요."; return; }
+    const targets = records.filter(r=> (r.date||"").slice(0,7)===m);
+    bulkDelete(targets, `${m} 한 달치 데이터를 삭제합니다.`);
+  };
+  $("delRangeBtn").onclick = ()=>{
+    const from=$("delFrom").value, to=$("delTo").value;
+    if(!from || !to){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="시작일과 종료일을 모두 선택하세요."; return; }
+    if(from>to){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="시작일이 종료일보다 뒤입니다."; return; }
+    const targets = records.filter(r=> r.date>=from && r.date<=to);
+    bulkDelete(targets, `${from} ~ ${to} 기간 데이터를 삭제합니다.`);
+  };
+  $("delAllBtn").onclick = ()=>{
+    if(!isMaster){ alert("전체 삭제는 대표 관리자만 할 수 있습니다."); return; }
+    const ans = prompt(`전체 데이터(${records.length}건)를 삭제합니다. 되돌릴 수 없습니다.\n계속하려면 '삭제'를 입력하세요.`);
+    if(ans!=="삭제"){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="전체 삭제를 취소했습니다."; return; }
+    bulkDelete([...records], "전체 데이터를 삭제합니다.");
+  };
 
   /* ---------- 엑셀 내보내기 ---------- */
   $("exportBtn").onclick = ()=>{
