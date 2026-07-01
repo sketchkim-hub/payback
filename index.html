@@ -585,6 +585,17 @@ function startApp(){
   $("fDate").addEventListener("change", updatePreview);
   [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
 
+  /* ---------- 휴대폰 번호 자동 하이픈 (010-1234-5678) ---------- */
+  $("fPhone").addEventListener("input", (e)=>{
+    const d = $("fPhone").value.replace(/\D/g,"").slice(0,11);
+    let f = d;
+    if (d.length > 7)      f = d.slice(0,3)+"-"+d.slice(3,7)+"-"+d.slice(7);
+    else if (d.length > 3) f = d.slice(0,3)+"-"+d.slice(3);
+    // 하이픈을 지우는 중이면 끝의 '-'는 다시 붙이지 않음
+    if (e.inputType === "deleteContentBackward" && f.endsWith("-")) f = f.slice(0,-1);
+    $("fPhone").value = f;
+  });
+
   /* ---------- 중복키 (이름 정규화) ---------- */
   async function makeDupKey(name, birth, phone){
     const raw = cleanName(name) + "|" + birth + "|" + digitsOnly(phone);
