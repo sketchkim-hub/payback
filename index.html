@@ -94,6 +94,8 @@
   /* 대표 관리자 전용 열 */
   .mcol{display:none}
   body.is-master .mcol{display:table-cell}
+  .mfilter{display:none}
+  body.is-master .mfilter{display:inline-block}
   /* 접수 폼: 휴대폰=1열(기존과 동일), 태블릿·PC=2열 */
   .form-grid{display:contents}
   @media(min-width:700px){
@@ -290,7 +292,7 @@
 
           <div class="field wide">
             <label for="fAmount">구매금액 (원)</label>
-            <input id="fAmount" type="number" inputmode="numeric" placeholder="예: 35000" min="0" />
+            <input id="fAmount" type="text" inputmode="numeric" placeholder="예: 35,000" autocomplete="off" />
             <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
           </div>
 
@@ -330,6 +332,7 @@
       <div class="card pad">
         <div class="toolbar">
           <select id="statYear"></select>
+          <select id="statOperator" class="mfilter"></select>
           <select id="statScope" class="grow">
             <option value="day">선택한 날짜</option>
             <option value="all">연도 전체 기간</option>
@@ -368,6 +371,7 @@
         <div class="toolbar">
           <input id="search" type="text" placeholder="이름·전화번호 검색" class="grow" />
           <select id="dataYear"></select>
+          <select id="dataOperator" class="mfilter"></select>
           <select id="dataDistrict">
             <option value="">전체 지역</option>
             <option value="동구">동구</option>
@@ -403,6 +407,17 @@
           <div><span>권한</span><b id="acctRole">-</b></div>
         </div>
 
+        <div class="modal-sec" id="masterMgmtSec" style="display:none">
+          <h4>대표 관리자 지정</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">등록된 담당자 중 대표 관리자를 지정/해제합니다. 대표는 전체·계정별 집계를 볼 수 있습니다.</p>
+          <div id="masterList"></div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <input id="newMasterEmail" type="email" placeholder="이메일로 직접 추가" style="flex:1;margin-bottom:0" autocomplete="off" />
+            <button id="addMasterBtn" class="btn-sm btn-blue" style="color:#fff">대표 추가</button>
+          </div>
+          <div id="masterMsg" class="err"></div>
+        </div>
+
         <div class="modal-sec">
           <h4>비밀번호 변경</h4>
           <input id="curPw" type="password" placeholder="현재 비밀번호" autocomplete="current-password" />
@@ -427,7 +442,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
   sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction }
+import { getFirestore, collection, addDoc, deleteDoc, doc, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ===================================================================
@@ -444,7 +459,7 @@ const FIREBASE_CONFIG = {
 const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
 const MARKET_NAME = "문창백년전통시장";            // 화면 표기용(자유 변경)
 const PAYOUT_CAP = 10000;                         // 1인당 전체 행사 기간 누적 지급 한도(원)
-const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). 실제 대표 이메일로 바꾸세요. 여러 명이면 쉼표로 추가
+const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). 여러 명이면 쉼표로 추가
 /* =================================================================== */
 
 const $ = id => document.getElementById(id);
@@ -468,26 +483,41 @@ function startApp(){
   const col = collection(db, "applications");
 
   let records = [];     // 실시간 캐시
-  let unsub = null;
-  let currentUid = null, currentEmail = "", isMaster = false;
-  const mastersLower = MASTER_EMAILS.map(e=>String(e||"").toLowerCase());
+  let unsub = null, cfgUnsub = null;
+  let currentUid = null, currentEmail = "", isMaster = false, dynamicMasters = [];
+  const bootstrapMasters = MASTER_EMAILS.map(e=>String(e||"").toLowerCase());
+  const CFG_ID = "_config_admins";              // 대표 관리자 목록 저장 문서(applications 내)
 
-  /* ---------- 인증 ---------- */
+  /* ---------- 인증 + 역할 ---------- */
   onAuthStateChanged(auth, user => {
     if (user) {
       currentUid = user.uid;
       currentEmail = user.email || "";
-      isMaster = mastersLower.includes(currentEmail.toLowerCase());
-      document.body.classList.toggle("is-master", isMaster);
-      $("roleTag").textContent = (isMaster ? "● 대표 관리자" : "● 담당자") + " · " + currentEmail;
-      $("acctSection").style.display = isMaster ? "block" : "none";
-      show("appScreen"); subscribe(); todayDefaults(); resetIdle();
+      show("appScreen"); todayDefaults(); resetIdle();
+      applyRole();                              // 우선 파일 지정(부트스트랩) 기준 적용
+      if (cfgUnsub) cfgUnsub();
+      cfgUnsub = onSnapshot(doc(db,"applications",CFG_ID),
+        snap => { dynamicMasters = (snap.exists() && Array.isArray(snap.data().masters) ? snap.data().masters : []).map(e=>String(e||"").toLowerCase()); applyRole(); if (acctModal.classList.contains("show")) renderMasterList(); },
+        ()  => { dynamicMasters = []; applyRole(); });
     } else {
       currentUid = null; currentEmail = ""; isMaster = false;
       document.body.classList.remove("is-master");
-      show("loginScreen"); if (unsub) unsub(); clearTimeout(idleTimer);
+      if (unsub) { unsub(); unsub=null; }
+      if (cfgUnsub) { cfgUnsub(); cfgUnsub=null; }
+      clearTimeout(idleTimer);
+      show("loginScreen");
     }
   });
+
+  function applyRole(){
+    const was = isMaster;
+    const em = currentEmail.toLowerCase();
+    isMaster = bootstrapMasters.includes(em) || dynamicMasters.includes(em);
+    document.body.classList.toggle("is-master", isMaster);
+    if (currentEmail) $("roleTag").textContent = (isMaster ? "● 대표 관리자" : "● 담당자") + " · " + currentEmail;
+    $("acctSection").style.display = isMaster ? "block" : "none";
+    if (unsub===null || was!==isMaster){ if(unsub){unsub();unsub=null;} subscribe(); }  // 역할 바뀌면 구독 재설정
+  }
 
   $("loginBtn").onclick = async () => {
     const email = $("emailInput").value.trim();
@@ -538,11 +568,52 @@ function startApp(){
     $("acctRole").textContent = isMaster ? "대표 관리자" : "담당자";
     $("curPw").value=""; $("newPw1").value=""; $("newPw2").value="";
     $("acctMsg").style.color=""; $("acctMsg").textContent="";
+    $("masterMgmtSec").style.display = isMaster ? "block" : "none";
+    if (isMaster) renderMasterList();
     acctModal.classList.add("show");
   }
   function closeAcct(){ acctModal.classList.remove("show"); }
   $("acctBtn").onclick = openAcct;
   $("acctClose").onclick = closeAcct;
+
+  /* ---------- 대표 관리자 지정 ---------- */
+  function renderMasterList(){
+    $("masterMsg").textContent = "";
+    const used = [...new Set(records.map(r=>r.operatorEmail).filter(Boolean).map(e=>e.toLowerCase()))];
+    const all = [...new Set([...bootstrapMasters, ...dynamicMasters, ...used])].sort();
+    $("masterList").innerHTML = all.length ? all.map(em=>{
+      const isBoot = bootstrapMasters.includes(em);
+      const isDyn = dynamicMasters.includes(em);
+      const on = isBoot || isDyn;
+      const badge = isBoot
+        ? `<span style="font-size:11px;color:var(--dancheong-red)">대표(파일지정·고정)</span>`
+        : `<button class="btn-sm master-toggle" data-email="${esc(em)}" style="background:${on?'var(--dancheong-blue)':'var(--hanji-2)'};color:${on?'#fff':'var(--ink-soft)'}">${on?'대표 ✓':'담당자'}</button>`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px">
+        <span style="overflow:hidden;text-overflow:ellipsis">${esc(em)}${em===currentEmail.toLowerCase()?' <span style="color:var(--ink-soft)">(나)</span>':''}</span>${badge}</div>`;
+    }).join("") : `<div class="hint">아직 접수 기록이 있는 담당자가 없습니다. 아래에서 이메일로 직접 추가하세요.</div>`;
+    $("masterList").querySelectorAll(".master-toggle").forEach(b=>{
+      b.onclick = ()=> toggleMaster(b.dataset.email);
+    });
+  }
+  async function saveMasters(list){
+    await setDoc(doc(db,"applications",CFG_ID), { config:true, masters:list, updatedAt: serverTimestamp() }, { merge:true });
+  }
+  async function toggleMaster(email){
+    const em = email.toLowerCase();
+    let list = [...dynamicMasters];
+    if (list.includes(em)) list = list.filter(x=>x!==em);
+    else list.push(em);
+    try { await saveMasters(list); }   // 저장되면 onSnapshot이 목록·역할을 갱신
+    catch(e){ $("masterMsg").textContent = "저장 실패: " + (e.code||e.message); }
+  }
+  $("addMasterBtn").onclick = async ()=>{
+    const em = $("newMasterEmail").value.trim().toLowerCase();
+    $("masterMsg").style.color="";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ $("masterMsg").textContent="올바른 이메일을 입력하세요."; return; }
+    if (bootstrapMasters.includes(em) || dynamicMasters.includes(em)){ $("masterMsg").textContent="이미 대표 관리자입니다."; return; }
+    try { await saveMasters([...dynamicMasters, em]); $("newMasterEmail").value=""; $("masterMsg").style.color="var(--dancheong-blue)"; $("masterMsg").textContent="추가되었습니다."; }
+    catch(e){ $("masterMsg").textContent="저장 실패: "+(e.code||e.message); }
+  };
   acctModal.addEventListener("click", e=>{ if(e.target===acctModal) closeAcct(); });
 
   $("changePwBtn").onclick = async () => {
@@ -582,10 +653,22 @@ function startApp(){
       ? query(col, orderBy("createdAt","desc"))
       : query(col, where("operatorUid","==",currentUid));
     unsub = onSnapshot(q, snap => {
-      records = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(r => !r.ledger);
+      records = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(r => !r.ledger && !r.config);
       if (!isMaster) records.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
       refreshYearOptions();
+      refreshOperatorOptions();
       renderStats(); renderData();
+    });
+  }
+
+  /* ---------- 담당자(계정) 선택지 자동 채우기 — 대표 전용 필터 ---------- */
+  function refreshOperatorOptions(){
+    const ops = [...new Set(records.map(r=>r.operatorEmail).filter(Boolean))].sort();
+    [["statOperator","전체(합산)"],["dataOperator","전체 담당자"]].forEach(([id,allLabel])=>{
+      const sel = $(id); if(!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = `<option value="">${allLabel}</option>` + ops.map(e=>`<option value="${e}">${e}</option>`).join("");
+      sel.value = [...sel.options].some(o=>o.value===prev) ? prev : "";
     });
   }
 
@@ -666,7 +749,7 @@ function startApp(){
   function updatePreview(){
     const el = $("couponPreview");
     const box = $("historyBox"); box.className="histbox";
-    const amount = Number($("fAmount").value);
+    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
     const tier = couponFor(amount);
     const name = $("fName").value.trim();
     const birth = getBirth();
@@ -732,6 +815,12 @@ function startApp(){
     $("fPhone").value = f;
   });
 
+  /* ---------- 구매금액 천단위 콤마 (숫자만) ---------- */
+  $("fAmount").addEventListener("input", ()=>{
+    const d = $("fAmount").value.replace(/\D/g,"");
+    $("fAmount").value = d ? Number(d).toLocaleString("ko-KR") : "";
+  });
+
   /* ---------- 중복키 (이름 정규화) ---------- */
   async function makeDupKey(name, birth, phone){
     const raw = cleanName(name) + "|" + birth + "|" + digitsOnly(phone);
@@ -763,7 +852,7 @@ function startApp(){
     const district = $("fDistrict").value;
     const address = $("fAddress").value.trim();
     const marketing = $("fMarketing").checked;
-    const amount = Number($("fAmount").value);
+    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
     const date = $("fDate").value;
 
     if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
@@ -831,23 +920,28 @@ function startApp(){
   function toast(el,kind,title,msg){ el.className="result "+(kind==="warn"?"dup":"ok")+" show"; el.innerHTML=`<span class="big">${esc(title)}</span>${esc(msg)}`; }
 
   /* ---------- 통계 ---------- */
-  function statsSource(){
+  function statsSource(ignoreOp){
     const y = $("statYear").value;            // "" = 전체 연도
     let rows = y ? records.filter(r=>yearOf(r.date)===y) : records;
     if ($("statScope").value!=="all"){
       const d = $("statDate").value;
       rows = rows.filter(r=>r.date===d);
     }
+    if (!ignoreOp){                            // 대표 전용: 담당자 선택 필터
+      const op = $("statOperator").value;
+      if (op) rows = rows.filter(r=>(r.operatorEmail||"")===op);
+    }
     return rows;
   }
   function renderStats(){
-    const rows = statsSource();
+    const rows = statsSource();                // 카드: 선택한 담당자(또는 전체) 기준
     const c5 = rows.filter(r=>r.coupon===5000).length;
     const c10 = rows.filter(r=>r.coupon===10000).length;
     const total = rows.reduce((s,r)=>s+(r.coupon||0),0);
-    // 담당자는 '내 접수' 기준임을 명시
-    $("statScopeLabel").textContent = isMaster ? "신청 인원(전체)" : "내 신청 인원";
-    $("sTotalLabel").textContent = isMaster ? "전체 총 지급 금액" : "내 총 지급 금액";
+    const op = isMaster ? $("statOperator").value : "";
+    // 라벨: 대표는 전체/선택 담당자, 담당자는 '내 접수'
+    $("statScopeLabel").textContent = !isMaster ? "내 신청 인원" : (op ? "신청 인원("+op+")" : "신청 인원(전체)");
+    $("sTotalLabel").textContent = !isMaster ? "내 총 지급 금액" : (op ? "지급 금액("+op+")" : "전체 총 지급 금액");
     $("sCount").textContent = rows.length;
     $("s5cnt").innerHTML = c5+'<span style="font-size:14px">장</span>';
     $("s5sum").textContent = won(c5*5000)+"원";
@@ -855,16 +949,17 @@ function startApp(){
     $("s10sum").textContent = won(c10*10000)+"원";
     $("sTotal").textContent = won(total)+"원";
 
-    // 계정(담당자)별 집계 — 대표 관리자만
+    // 계정(담당자)별 집계 — 대표 관리자만 (담당자 선택과 무관하게 항상 전체 계정 표시)
     if (isMaster){
+      const arows = statsSource(true);
       const am = {};
-      rows.forEach(r=>{
+      arows.forEach(r=>{
         const k = r.operatorEmail || "(미지정)";
         (am[k] = am[k] || {n:0, buy:0, pay:0});
         am[k].n++; am[k].buy += (r.amount||0); am[k].pay += (r.coupon||0);
       });
       const akeys = Object.keys(am).sort((a,b)=> am[b].pay-am[a].pay);
-      const tot = rows.reduce((o,r)=>({n:o.n+1, buy:o.buy+(r.amount||0), pay:o.pay+(r.coupon||0)}), {n:0,buy:0,pay:0});
+      const tot = arows.reduce((o,r)=>({n:o.n+1, buy:o.buy+(r.amount||0), pay:o.pay+(r.coupon||0)}), {n:0,buy:0,pay:0});
       $("acctBody").innerHTML = (akeys.length ? akeys.map(k=>{
         const d=am[k];
         return `<tr><td>${esc(k)}</td><td style="text-align:right">${d.n}건</td><td style="text-align:right">${won(d.buy)}원</td><td style="text-align:right"><b>${won(d.pay)}원</b></td></tr>`;
@@ -903,6 +998,7 @@ function startApp(){
   $("statScope").onchange = ()=>{ $("statDate").style.display = $("statScope").value==="all"?"none":""; renderStats(); };
   $("statDate").onchange = renderStats;
   $("statYear").onchange = renderStats;
+  $("statOperator").onchange = renderStats;
 
   /* ---------- 데이터 관리 ---------- */
   const maskName = n => n.length<=1 ? n : n[0]+"*".repeat(n.length-1);
@@ -912,10 +1008,12 @@ function startApp(){
     const fy = $("dataYear").value;
     const fd = $("dataDate").value;
     const fg = $("dataDistrict").value;
+    const fo = $("dataOperator").value;
     let rows = records;
     if (fy) rows = rows.filter(r=>yearOf(r.date)===fy);
     if (fd) rows = rows.filter(r=>r.date===fd);
     if (fg) rows = rows.filter(r=>(r.district||"")===fg);
+    if (fo) rows = rows.filter(r=>(r.operatorEmail||"")===fo);
     if (kw) rows = rows.filter(r=> r.name.includes(kw) || (r.phone||"").includes(kw.replace(/\D/g,"")));
     const body = $("dataBody");
     $("dataEmpty").style.display = rows.length? "none":"block";
@@ -958,16 +1056,19 @@ function startApp(){
   $("dataDate").onchange = renderData;
   $("dataDistrict").onchange = renderData;
   $("dataYear").onchange = renderData;
+  $("dataOperator").onchange = renderData;
 
   /* ---------- 엑셀 내보내기 ---------- */
   $("exportBtn").onclick = ()=>{
     const fy = $("dataYear").value;
     const fd = $("dataDate").value;
     const fg = $("dataDistrict").value;
+    const fo = $("dataOperator").value;
     let rows = records;
     if (fy) rows = rows.filter(r=>yearOf(r.date)===fy);
     if (fd) rows = rows.filter(r=>r.date===fd);
     if (fg) rows = rows.filter(r=>(r.district||"")===fg);
+    if (fo) rows = rows.filter(r=>(r.operatorEmail||"")===fo);
     if(!rows.length){ alert("내보낼 데이터가 없습니다."); return; }
     const aoa = rows.map(r=>({
       "신청일자": r.date, "이름": r.name, "생년월일": r.birth,
