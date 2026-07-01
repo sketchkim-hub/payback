@@ -94,6 +94,29 @@
   /* 대표 관리자 전용 열 */
   .mcol{display:none}
   body.is-master .mcol{display:table-cell}
+  /* 접수 폼: 휴대폰=1열(기존과 동일), 태블릿·PC=2열 */
+  .form-grid{display:contents}
+  @media(min-width:700px){
+    .wrap{max-width:900px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:22px;row-gap:4px;align-items:start}
+    .form-grid .field{display:block}
+    .form-grid .field label{margin-top:10px}
+    .form-grid .wide{grid-column:1 / -1}
+    .tier-row{margin-top:2px}
+  }
+  /* 내 계정 모달 */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(43,42,38,.45);z-index:100;padding:20px;overflow:auto}
+  .modal-overlay.show{display:flex;align-items:flex-start;justify-content:center}
+  .modal-card{background:var(--paper);border-radius:16px;max-width:400px;width:100%;margin-top:6vh;padding:22px;box-shadow:var(--shadow)}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .modal-x{background:none;border:none;font-size:18px;color:var(--ink-soft);cursor:pointer;padding:4px 8px}
+  .modal-x:hover{color:var(--ink)}
+  .acct-info{background:var(--hanji-2);border-radius:10px;padding:12px 14px;font-size:13.5px}
+  .acct-info div{display:flex;justify-content:space-between;padding:3px 0}
+  .acct-info span{color:var(--ink-soft)}
+  .modal-sec{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+  .modal-sec h4{font-size:14px;margin:0 0 10px;font-weight:700}
+  .modal-sec input{margin-bottom:8px}
   button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-weight:700}
   .btn{width:100%;padding:14px;background:var(--ink);color:#fff;font-size:15px;margin-top:18px}
   .btn:hover{background:#000}
@@ -192,6 +215,7 @@
       <input id="pwInput" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" />
       <div id="loginErr" class="err"></div>
       <button id="loginBtn" class="btn btn-blue">로그인</button>
+      <button id="forgotBtn" class="btn-ghost">비밀번호를 잊으셨나요? 재설정 메일 받기</button>
       <button id="setupPinBtn" class="btn-ghost">처음이신가요? 관리자 계정 등록하기</button>
     </div>
   </section>
@@ -200,7 +224,10 @@
   <section id="appScreen" class="screen">
     <div class="topbar">
       <span id="roleTag" style="font-size:12px;color:var(--ink-soft)">● 연결됨</span>
-      <button id="logoutBtn" class="logout">로그아웃</button>
+      <div style="display:flex;gap:6px">
+        <button id="acctBtn" class="logout">내 계정</button>
+        <button id="logoutBtn" class="logout">로그아웃</button>
+      </div>
     </div>
     <nav class="tabs">
       <button data-tab="entry" class="on">신청 접수</button>
@@ -211,71 +238,90 @@
     <!-- 탭1: 접수 -->
     <div id="tab-entry" class="tabpane">
       <div class="card pad">
-        <div class="tier-row">
-          <div class="tier t5"><b>3만원 이상 구매</b><span class="amt">5,000원</span></div>
-          <div class="tier t10"><b>5만원 이상 구매</b><span class="amt">10,000원</span></div>
+        <div class="form-grid">
+          <div class="tier-row wide">
+            <div class="tier t5"><b>3만원 이상 구매</b><span class="amt">5,000원</span></div>
+            <div class="tier t10"><b>5만원 이상 구매</b><span class="amt">10,000원</span></div>
+          </div>
+
+          <div class="field">
+            <label for="fDate">신청일자</label>
+            <input id="fDate" type="date" />
+          </div>
+
+          <div class="field">
+            <label for="fName">이름</label>
+            <input id="fName" type="text" placeholder="홍길동" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="bY">생년월일</label>
+            <div class="datefield">
+              <input id="bY" class="seg" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" autocomplete="off" />
+              <span class="sep">-</span>
+              <input id="bM" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="off" />
+              <span class="sep">-</span>
+              <input id="bD" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="DD" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="fPhone">휴대폰 번호</label>
+            <input id="fPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="fDistrict">거주 지역 (구)</label>
+            <select id="fDistrict">
+              <option value="">구 선택</option>
+              <option value="동구">동구</option>
+              <option value="중구">중구</option>
+              <option value="서구">서구</option>
+              <option value="유성구">유성구</option>
+              <option value="대덕구">대덕구</option>
+              <option value="그 외">그 외 (타지역)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fAddress">상세주소 <span style="font-weight:400;color:var(--ink-soft)">(선택)</span></label>
+            <input id="fAddress" type="text" placeholder="예: ○○동 ○○아파트" autocomplete="off" />
+          </div>
+
+          <div class="field wide">
+            <label for="fAmount">구매금액 (원)</label>
+            <input id="fAmount" type="number" inputmode="numeric" placeholder="예: 35000" min="0" />
+            <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
+          </div>
+
+          <div class="wide"><div id="historyBox" class="histbox"></div></div>
+
+          <div class="wide">
+            <div class="consent">
+              <input id="fConsent" type="checkbox" />
+              <label for="fConsent"><b style="color:var(--ink)">[필수]</b> 개인정보 수집·이용에 동의합니다. (상품권 지급 및 중복 확인 목적)</label>
+            </div>
+            <div class="consent" style="margin-top:8px">
+              <input id="fMarketing" type="checkbox" />
+              <label for="fMarketing"><b style="color:var(--dancheong-blue)">[선택]</b> 사후 시장 페이백 행사 등 문창백년전통시장 행사 알림 수신에 동의합니다.</label>
+            </div>
+            <details class="terms">
+              <summary>수집 항목 및 안내 보기</summary>
+              <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
+                 • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
+                 • 지급 기준: 3만원↑ 5천원 / 5만원↑ 1만원, 1인 연간 누적 1만원 한도 (한도 도달 시 참여 종료)<br>
+                 • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
+                 • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
+                 • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
+            </details>
+          </div>
+
+          <div class="wide" style="display:flex;gap:8px;margin-top:14px">
+            <button id="submitBtn" class="btn btn-blue" style="flex:1;margin-top:0">지급 접수하기</button>
+            <button id="resetBtn" class="btn" style="flex:0 0 auto;width:auto;margin-top:0;padding:14px 18px;background:var(--ink-soft)">초기화</button>
+          </div>
+          <div id="entryResult" class="result wide"></div>
         </div>
-
-        <label for="fDate">신청일자</label>
-        <input id="fDate" type="date" />
-
-        <label for="fName">이름</label>
-        <input id="fName" type="text" placeholder="홍길동" autocomplete="off" />
-
-        <label for="bY">생년월일</label>
-        <div class="datefield">
-          <input id="bY" class="seg" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" autocomplete="off" />
-          <span class="sep">-</span>
-          <input id="bM" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="off" />
-          <span class="sep">-</span>
-          <input id="bD" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="DD" autocomplete="off" />
-        </div>
-
-        <label for="fPhone">휴대폰 번호</label>
-        <input id="fPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="off" />
-
-        <label for="fDistrict">거주 지역 (구)</label>
-        <select id="fDistrict">
-          <option value="">구 선택</option>
-          <option value="동구">동구</option>
-          <option value="중구">중구</option>
-          <option value="서구">서구</option>
-          <option value="유성구">유성구</option>
-          <option value="대덕구">대덕구</option>
-          <option value="그 외">그 외 (타지역)</option>
-        </select>
-
-        <label for="fAddress">상세주소 <span style="font-weight:400;color:var(--ink-soft)">(선택)</span></label>
-        <input id="fAddress" type="text" placeholder="예: ○○동 ○○아파트" autocomplete="off" />
-
-        <label for="fAmount">구매금액 (원)</label>
-        <input id="fAmount" type="number" inputmode="numeric" placeholder="예: 35000" min="0" />
-        <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
-        <div id="historyBox" class="histbox"></div>
-
-        <div class="consent">
-          <input id="fConsent" type="checkbox" />
-          <label for="fConsent"><b style="color:var(--ink)">[필수]</b> 개인정보 수집·이용에 동의합니다. (상품권 지급 및 중복 확인 목적)</label>
-        </div>
-        <div class="consent" style="margin-top:8px">
-          <input id="fMarketing" type="checkbox" />
-          <label for="fMarketing"><b style="color:var(--dancheong-blue)">[선택]</b> 사후 시장 페이백 행사 등 문창백년전통시장 행사 알림 수신에 동의합니다.</label>
-        </div>
-        <details class="terms">
-          <summary>수집 항목 및 안내 보기</summary>
-          <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
-             • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
-             • 지급 기준: 3만원↑ 5천원 / 5만원↑ 1만원, 1인 연간 누적 1만원 한도 (한도 도달 시 참여 종료)<br>
-             • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
-             • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
-             • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
-        </details>
-
-        <div style="display:flex;gap:8px;margin-top:18px">
-          <button id="submitBtn" class="btn btn-blue" style="flex:1;margin-top:0">지급 접수하기</button>
-          <button id="resetBtn" class="btn" style="flex:0 0 auto;width:auto;margin-top:0;padding:14px 18px;background:var(--ink-soft)">초기화</button>
-        </div>
-        <div id="entryResult" class="result"></div>
       </div>
     </div>
 
@@ -344,12 +390,42 @@
         <div class="note">표에서는 개인정보 보호를 위해 이름·연락처 일부가 가려집니다. 엑셀 내보내기에는 전체 정보가 포함되니 취급에 유의하세요.</div>
       </div>
     </div>
+
+    <!-- 내 계정 모달 -->
+    <div id="acctModal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 style="font-family:'Gowun Batang',serif;margin:0;font-size:18px">내 계정</h3>
+          <button id="acctClose" class="modal-x">✕</button>
+        </div>
+        <div class="acct-info">
+          <div><span>이메일</span><b id="acctEmail">-</b></div>
+          <div><span>권한</span><b id="acctRole">-</b></div>
+        </div>
+
+        <div class="modal-sec">
+          <h4>비밀번호 변경</h4>
+          <input id="curPw" type="password" placeholder="현재 비밀번호" autocomplete="current-password" />
+          <input id="newPw1" type="password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" />
+          <input id="newPw2" type="password" placeholder="새 비밀번호 확인" autocomplete="new-password" />
+          <button id="changePwBtn" class="btn btn-blue" style="margin-top:12px">비밀번호 변경</button>
+          <div id="acctMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec">
+          <h4>비밀번호를 잊으셨나요?</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">가입한 이메일로 재설정 링크를 보내드립니다.</p>
+          <button id="resetMailBtn" class="btn" style="margin-top:0;background:var(--ink-soft)">재설정 메일 받기</button>
+        </div>
+      </div>
+    </div>
   </section>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+  sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -438,6 +514,66 @@ function startApp(){
   };
   $("pwInput").addEventListener("keydown", e=>{ if(e.key==="Enter") $("loginBtn").click(); });
   $("logoutBtn").onclick = ()=> signOut(auth);
+
+  /* ---------- 비밀번호 찾기 (로그인 화면) ---------- */
+  $("forgotBtn").onclick = async () => {
+    const email = $("emailInput").value.trim();
+    $("loginErr").textContent = "";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("loginErr").textContent = "재설정 메일을 받을 이메일을 위 칸에 입력하세요."; return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      $("loginErr").style.color = "var(--dancheong-blue)";
+      $("loginErr").textContent = "재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인하세요.";
+      setTimeout(()=>{ $("loginErr").style.color=""; }, 100);
+    } catch(e){
+      $("loginErr").style.color = "";
+      $("loginErr").textContent = (e.code==="auth/user-not-found") ? "등록되지 않은 이메일입니다." : "메일 발송 실패: " + e.code;
+    }
+  };
+
+  /* ---------- 내 계정 모달 ---------- */
+  const acctModal = $("acctModal");
+  function openAcct(){
+    $("acctEmail").textContent = currentEmail;
+    $("acctRole").textContent = isMaster ? "대표 관리자" : "담당자";
+    $("curPw").value=""; $("newPw1").value=""; $("newPw2").value="";
+    $("acctMsg").style.color=""; $("acctMsg").textContent="";
+    acctModal.classList.add("show");
+  }
+  function closeAcct(){ acctModal.classList.remove("show"); }
+  $("acctBtn").onclick = openAcct;
+  $("acctClose").onclick = closeAcct;
+  acctModal.addEventListener("click", e=>{ if(e.target===acctModal) closeAcct(); });
+
+  $("changePwBtn").onclick = async () => {
+    const cur = $("curPw").value, n1 = $("newPw1").value, n2 = $("newPw2").value;
+    const msg = $("acctMsg"); msg.style.color="";
+    if (!cur || !n1){ msg.textContent="현재 비밀번호와 새 비밀번호를 입력하세요."; return; }
+    if (n1.length < 6){ msg.textContent="새 비밀번호는 6자 이상이어야 합니다."; return; }
+    if (n1 !== n2){ msg.textContent="새 비밀번호가 서로 다릅니다."; return; }
+    $("changePwBtn").disabled = true;
+    try {
+      const cred = EmailAuthProvider.credential(currentEmail, cur);
+      await reauthenticateWithCredential(auth.currentUser, cred);   // 현재 비번 확인
+      await updatePassword(auth.currentUser, n1);
+      msg.style.color = "var(--dancheong-blue)";
+      msg.textContent = "비밀번호가 변경되었습니다.";
+      $("curPw").value=""; $("newPw1").value=""; $("newPw2").value="";
+    } catch(e){
+      msg.style.color="";
+      msg.textContent = (e.code==="auth/invalid-credential"||e.code==="auth/wrong-password")
+        ? "현재 비밀번호가 올바르지 않습니다." : "변경 실패: " + (e.code||e.message);
+    } finally { $("changePwBtn").disabled = false; }
+  };
+
+  $("resetMailBtn").onclick = async () => {
+    const msg = $("acctMsg"); msg.style.color="";
+    try {
+      await sendPasswordResetEmail(auth, currentEmail);
+      msg.style.color = "var(--dancheong-blue)";
+      msg.textContent = currentEmail + " 로 재설정 메일을 보냈습니다. (스팸함도 확인)";
+    } catch(e){ msg.style.color=""; msg.textContent = "메일 발송 실패: " + (e.code||e.message); }
+  };
 
   /* ---------- 실시간 구독 (역할별) ---------- */
   function subscribe(){
