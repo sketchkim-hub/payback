@@ -212,7 +212,8 @@
     <div id="tab-entry" class="tabpane">
       <div class="card pad">
         <div class="tier-row">
-          <div class="tier t5" style="flex:1"><b>3만원 이상 구매</b><span class="amt">5,000원 상품권</span></div>
+          <div class="tier t5"><b>3만원 이상 구매</b><span class="amt">5,000원</span></div>
+          <div class="tier t10"><b>5만원 이상 구매</b><span class="amt">10,000원</span></div>
         </div>
 
         <label for="fDate">신청일자</label>
@@ -264,7 +265,7 @@
           <summary>수집 항목 및 안내 보기</summary>
           <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
              • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
-             • 지급 기준: 1인 연간 최대 1만원(5천원권 × 2매) 한도 내 지급, 한도 도달 시 종료<br>
+             • 지급 기준: 3만원↑ 5천원 / 5만원↑ 1만원, 1인 연간 누적 1만원 한도 (한도 도달 시 참여 종료)<br>
              • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
              • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
              • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
@@ -292,6 +293,7 @@
         <div class="stat-grid">
           <div class="stat"><div class="k" id="statScopeLabel">신청 인원</div><div class="v" id="sCount">0</div><div class="sub">명</div></div>
           <div class="stat"><div class="k">5천원 상품권</div><div class="v" id="s5cnt">0<span style="font-size:14px">장</span></div><div class="sub" id="s5sum">0원</div></div>
+          <div class="stat"><div class="k">1만원 상품권</div><div class="v" id="s10cnt">0<span style="font-size:14px">장</span></div><div class="sub" id="s10sum">0원</div></div>
           <div class="stat total"><div class="k" id="sTotalLabel">총 지급 금액 합계</div><div class="v" id="sTotal">0원</div></div>
         </div>
         <div id="acctSection" style="display:none">
@@ -366,7 +368,7 @@ const FIREBASE_CONFIG = {
 const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
 const MARKET_NAME = "문창백년전통시장";            // 화면 표기용(자유 변경)
 const PAYOUT_CAP = 10000;                         // 1인당 전체 행사 기간 누적 지급 한도(원)
-const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). 실제 대표 이메일로 바꾸세요. 여러 명이면 쉼표로 추가
+const MASTER_EMAILS = ["boss@payback.market"];    // ★ 대표 관리자 이메일(전체 집계 권한). 실제 대표 이메일로 바꾸세요. 여러 명이면 쉼표로 추가
 /* =================================================================== */
 
 const $ = id => document.getElementById(id);
@@ -513,7 +515,7 @@ function startApp(){
   function clearBirth(){ bY.value=bM.value=bD.value=""; }
 
   /* ---------- 쿠폰 판정 ---------- */
-  const couponFor = amt => amt>=30000 ? 5000 : 0;
+  const couponFor = amt => amt>=50000 ? 10000 : amt>=30000 ? 5000 : 0;
 
   /* ---------- 지급액 미리보기 + 기존 수령 내역 ---------- */
   // 이름에서 한글·영문·숫자 외 문자(백틱·공백·기호 등)는 무시하고 대조
@@ -667,7 +669,9 @@ function startApp(){
       const totalNow = paid + grant;
       r.className="result ok show";
       let note = "";
-      if (paid>0){
+      if (grant < tier){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 원래 ${won(tier)}원 대상이나 남은 한도가 ${won(CAP-paid)}원이라 <b>${won(grant)}원</b>만 지급 (누적 ${won(totalNow)}원, 한도 도달)</span>`;
+      } else if (paid>0){
         note = `<br><span style="font-size:12px;color:var(--dancheong-gold)">※ 기존 ${won(paid)}원 + 이번 ${won(grant)}원 = 누적 ${won(totalNow)}원${totalNow>=CAP?" (한도 도달)":` / 잔여 ${won(CAP-totalNow)}원`}</span>`;
       } else if (totalNow>=CAP){
         note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 한도(${won(CAP)}원)에 도달하여 이후에는 지급되지 않습니다.</span>`;
@@ -692,6 +696,7 @@ function startApp(){
   function renderStats(){
     const rows = statsSource();
     const c5 = rows.filter(r=>r.coupon===5000).length;
+    const c10 = rows.filter(r=>r.coupon===10000).length;
     const total = rows.reduce((s,r)=>s+(r.coupon||0),0);
     // 담당자는 '내 접수' 기준임을 명시
     $("statScopeLabel").textContent = isMaster ? "신청 인원(전체)" : "내 신청 인원";
@@ -699,6 +704,8 @@ function startApp(){
     $("sCount").textContent = rows.length;
     $("s5cnt").innerHTML = c5+'<span style="font-size:14px">장</span>';
     $("s5sum").textContent = won(c5*5000)+"원";
+    $("s10cnt").innerHTML = c10+'<span style="font-size:14px">장</span>';
+    $("s10sum").textContent = won(c10*10000)+"원";
     $("sTotal").textContent = won(total)+"원";
 
     // 계정(담당자)별 집계 — 대표 관리자만
@@ -824,12 +831,14 @@ function startApp(){
       "입력담당자": r.operatorEmail||""
     }));
     const c5=rows.filter(r=>r.coupon===5000).length;
+    const c10=rows.filter(r=>r.coupon===10000).length;
     const totalPaid=rows.reduce((s,r)=>s+(r.coupon||0),0);
     const totalBuy=rows.reduce((s,r)=>s+(r.amount||0),0);
     aoa.push({});
     aoa.push({"신청일자": isMaster ? "── 전체 집계 ──" : "── 내 접수 집계 ──"});
     aoa.push({"신청일자":"신청 인원","이름":rows.length+"명"});
     aoa.push({"신청일자":"5천원 상품권","이름":c5+"장","생년월일":won(c5*5000)+"원"});
+    aoa.push({"신청일자":"1만원 상품권","이름":c10+"장","생년월일":won(c10*10000)+"원"});
     aoa.push({"신청일자":"구매금액 합계","이름":won(totalBuy)+"원"});
     aoa.push({"신청일자":"지급금액 합계","이름":won(totalPaid)+"원"});
     aoa.push({"신청일자":"알림수신 동의","이름":rows.filter(r=>r.marketing).length+"명"});
