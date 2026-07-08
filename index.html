@@ -267,6 +267,13 @@
             <div class="tier t10"><b>5만원 이상 구매</b><span class="amt">10,000원</span></div>
           </div>
 
+          <div class="field wide">
+            <label for="fStore">구매 점포 <span style="font-weight:400;color:var(--ink-soft)">(상인회 점포 확인)</span></label>
+            <input id="fStore" list="storeOptions" type="text" placeholder="점포명 2~3글자 입력 → 자동완성" autocomplete="off" />
+            <datalist id="storeOptions"></datalist>
+            <div class="hint" id="storeCheck">등록된 상인회 점포명을 입력하면 자동으로 확인됩니다.</div>
+          </div>
+
           <div class="field">
             <label for="fDate">신청일자</label>
             <input id="fDate" type="date" />
@@ -309,13 +316,6 @@
           <div class="field">
             <label for="fAddress">상세주소 <span style="font-weight:400;color:var(--ink-soft)">(선택)</span></label>
             <input id="fAddress" type="text" placeholder="예: ○○동 ○○아파트" autocomplete="off" />
-          </div>
-
-          <div class="field wide">
-            <label for="fStore">구매 점포 <span style="font-weight:400;color:var(--ink-soft)">(상인회 점포 확인)</span></label>
-            <input id="fStore" list="storeOptions" type="text" placeholder="점포명 2~3글자 입력 → 자동완성" autocomplete="off" />
-            <datalist id="storeOptions"></datalist>
-            <div class="hint" id="storeCheck">등록된 상인회 점포명을 입력하면 자동으로 확인됩니다.</div>
           </div>
 
           <div class="field wide">
@@ -1452,6 +1452,13 @@ function startApp(){
     const gmap={}; rows.forEach(r=>{const k=r.district||"미지정"; gmap[k]=gmap[k]||{n:0,s:0}; gmap[k].n++; gmap[k].s+=(r.coupon||0);});
     [...order.filter(k=>gmap[k]), ...Object.keys(gmap).filter(k=>!order.includes(k))].forEach(k=>{
       aoa.push({"신청일자":k,"이름":gmap[k].n+"명","생년월일":won(gmap[k].s)+"원"});
+    });
+    // 점포별 집계
+    aoa.push({});
+    aoa.push({"신청일자":"── 점포별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액","상세주소":"5천원권"});
+    const smap={}; rows.forEach(r=>{const k=(r.store&&r.store.trim())||"(점포 미입력)"; smap[k]=smap[k]||{n:0,buy:0,pay:0}; smap[k].n++; smap[k].buy+=(r.amount||0); smap[k].pay+=(r.coupon||0);});
+    Object.keys(smap).sort((a,b)=>smap[b].pay-smap[a].pay).forEach(k=>{
+      aoa.push({"신청일자":k,"이름":smap[k].n+"건","생년월일":won(smap[k].buy)+"원","거주구":won(smap[k].pay)+"원","상세주소":won(Math.round(smap[k].pay/5000))+"매"});
     });
     const ws = XLSX.utils.json_to_sheet(aoa);
     ws["!cols"]=[{wch:12},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:10},{wch:10},{wch:12},{wch:22}];
