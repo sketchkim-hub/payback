@@ -414,7 +414,7 @@
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>일자</th><th>생년월일</th><th>이름</th><th>지역</th><th>연락처</th><th>금액</th><th>쿠폰</th><th class="mcol">입력자</th><th></th></tr></thead>
+            <thead><tr><th>일자</th><th>입력시각</th><th>생년월일</th><th>이름</th><th>지역</th><th>연락처</th><th>금액</th><th>쿠폰</th><th class="mcol">입력자</th><th></th></tr></thead>
             <tbody id="dataBody"></tbody>
           </table>
         </div>
@@ -511,6 +511,35 @@
         </div>
       </div>
     </div>
+
+    <!-- 상품권 금액 수정 모달 -->
+    <div id="editModal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 style="font-family:'Gowun Batang',serif;margin:0;font-size:18px">상품권 금액 수정</h3>
+          <button id="editClose" class="modal-x">✕</button>
+        </div>
+        <div class="acct-info">
+          <div><span>이름</span><b id="edName">-</b></div>
+          <div><span>신청일자</span><b id="edDate">-</b></div>
+          <div><span>입력시각</span><b id="edTime">-</b></div>
+          <div><span>구매금액</span><b id="edAmount">-</b></div>
+          <div><span>현재 지급액</span><b id="edCur">-</b></div>
+        </div>
+        <div class="modal-sec">
+          <h4>수정할 지급액</h4>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <button class="btn-sm ed-quick" data-v="5000" style="background:var(--hanji-2)">5,000원</button>
+            <button class="btn-sm ed-quick" data-v="10000" style="background:var(--hanji-2)">10,000원</button>
+            <button class="btn-sm ed-quick" data-v="0" style="background:var(--hanji-2)">0원 (미지급)</button>
+          </div>
+          <input id="edValue" type="text" inputmode="numeric" placeholder="직접 입력 (원)" autocomplete="off" />
+          <div class="hint" id="edHint">지급액을 고치면 누적 한도와 예산 집계도 자동으로 조정됩니다.</div>
+          <button id="edSaveBtn" class="btn btn-blue" style="margin-top:12px">수정 저장</button>
+          <div id="edMsg" class="err"></div>
+        </div>
+      </div>
+    </div>
   </section>
 </div>
 
@@ -543,6 +572,11 @@ const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const won = n => Number(n||0).toLocaleString("ko-KR");
+/* 입력시각(서버 기록) 표시용 — 시:분:초 */
+const p2 = n => String(n).padStart(2,"0");
+const tsDate = ts => (ts && typeof ts.seconds==="number") ? new Date(ts.seconds*1000) : null;
+const fmtTime = ts => { const d=tsDate(ts); return d ? `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : ""; };
+const fmtDateTime = ts => { const d=tsDate(ts); return d ? `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : ""; };
 const show = id => { document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $(id).classList.add("active"); };
 
 document.getElementById("marketName").textContent = MARKET_NAME + " · 상품권 지급 접수";
@@ -1315,18 +1349,21 @@ function startApp(){
     if (kw) rows = rows.filter(r=> r.name.includes(kw) || (r.phone||"").includes(kw.replace(/\D/g,"")));
     const body = $("dataBody");
     $("dataEmpty").style.display = rows.length? "none":"block";
-    body.innerHTML = rows.map(r=>`
+    body.innerHTML = rows.map(r=>{
+      const mine = isMaster || r.operatorUid===currentUid;    // 본인 입력 건(또는 대표)만 수정 가능
+      return `
       <tr>
         <td>${esc(r.date)}</td>
+        <td style="font-size:11.5px;color:var(--ink-soft);white-space:nowrap">${esc(fmtTime(r.createdAt))}${r.editedAt?'<br><span style="color:var(--dancheong-gold)">수정 '+esc(fmtTime(r.editedAt))+'</span>':''}</td>
         <td>${esc(r.birth||"")}</td>
         <td>${esc(maskName(r.name))}</td>
         <td>${esc(r.district||"-")}</td>
         <td>${esc(maskPhone(r.phone||""))}</td>
         <td>${won(r.amount)}원</td>
-        <td><span class="pill ${r.coupon===10000?'pill10':'pill5'}">${won(r.coupon)}</span>${r.exception?'<span class="pill" style="background:#f3ead2;color:#8a6d1b;margin-left:4px">예외</span>':''}</td>
+        <td><span class="pill ${r.coupon===10000?'pill10':'pill5'}">${won(r.coupon)}</span>${r.exception?'<span class="pill" style="background:#f3ead2;color:#8a6d1b;margin-left:4px">예외</span>':''}${r.editedBy?'<span class="pill" style="background:#f3ead2;color:#8a6d1b;margin-left:4px">수정</span>':''}</td>
         <td class="mcol" style="font-size:11.5px;color:var(--ink-soft)">${esc(r.operatorEmail||"-")}</td>
-        <td><button class="del" data-id="${r.id}" data-name="${esc(r.name)}">삭제</button></td>
-      </tr>`).join("");
+        <td style="white-space:nowrap">${mine?`<button class="edit" data-id="${r.id}" style="color:var(--dancheong-blue)">수정</button> `:""}<button class="del" data-id="${r.id}" data-name="${esc(r.name)}">삭제</button></td>
+      </tr>`;}).join("");
     body.querySelectorAll(".del").forEach(b=>{
       b.onclick = async ()=>{
         if(!confirm(`${b.dataset.name} 님 내역을 삭제할까요? (되돌릴 수 없음)`)) return;
@@ -1335,7 +1372,70 @@ function startApp(){
         catch(e){ alert("삭제 실패: "+(e.code||e.message||e)); }
       };
     });
+    body.querySelectorAll(".edit").forEach(b=>{
+      b.onclick = ()=> openEdit(b.dataset.id);
+    });
   }
+
+  /* ---------- 상품권 금액 수정 (본인 입력 건 / 대표) ---------- */
+  const editModal = $("editModal");
+  let editingId = null;
+  function openEdit(id){
+    const r = records.find(x=>x.id===id); if(!r) return;
+    if (!(isMaster || r.operatorUid===currentUid)){ alert("본인이 입력한 건만 수정할 수 있습니다."); return; }
+    editingId = id;
+    $("edName").textContent = r.name;
+    $("edDate").textContent = r.date||"-";
+    $("edTime").textContent = fmtDateTime(r.createdAt) || "-";
+    $("edAmount").textContent = won(r.amount)+"원";
+    $("edCur").textContent = won(r.coupon)+"원";
+    $("edValue").value = won(r.coupon);
+    $("edMsg").style.color=""; $("edMsg").textContent="";
+    $("edHint").textContent = `참고: 구매금액 ${won(r.amount)}원 기준 지급액은 ${won(couponFor(r.amount))}원입니다.`;
+    editModal.classList.add("show");
+  }
+  function closeEdit(){ editModal.classList.remove("show"); editingId=null; }
+  $("editClose").onclick = closeEdit;
+  editModal.addEventListener("click", e=>{ if(e.target===editModal) closeEdit(); });
+  $("edValue").addEventListener("input", ()=>{
+    const d = $("edValue").value.replace(/\D/g,"");
+    $("edValue").value = d ? Number(d).toLocaleString("ko-KR") : "";
+  });
+  document.querySelectorAll(".ed-quick").forEach(b=>{
+    b.onclick = ()=>{ $("edValue").value = won(Number(b.dataset.v)); };
+  });
+  $("edSaveBtn").onclick = async ()=>{
+    const r = records.find(x=>x.id===editingId); if(!r) return;
+    const nv = Number(($("edValue").value||"").replace(/\D/g,""));
+    const msg = $("edMsg"); msg.style.color="";
+    if (!Number.isFinite(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
+    if (nv % 5000 !== 0){ msg.textContent="실물이 5,000원권이므로 5,000원 단위로 입력하세요."; return; }
+    if (nv === (r.coupon||0)){ msg.textContent="현재 지급액과 같습니다."; return; }
+    const delta = nv - (r.coupon||0);
+    if (!confirm(`${r.name} 님의 지급액을 ${won(r.coupon)}원 → ${won(nv)}원으로 수정합니다.\n(누적 한도·예산도 함께 조정됩니다) 계속할까요?`)) return;
+    $("edSaveBtn").disabled = true;
+    try{
+      const lid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
+      const budgetRef = r.date ? doc(db,"applications","budget_"+r.date) : null;
+      await runTransaction(db, async (tx)=>{
+        let ls=null, bs=null;
+        if (lid) ls = await tx.get(doc(db,"applications",lid));
+        if (budgetRef) bs = await tx.get(budgetRef);
+        if (lid && ls.exists()){
+          const p = Math.max(0, (ls.data().paid||0) + delta);
+          tx.set(doc(db,"applications",lid), { paid:p }, { merge:true });
+        }
+        if (budgetRef && bs.exists()){
+          const iss = Math.max(0, (bs.data().issued||0) + delta);
+          tx.set(budgetRef, { issued:iss }, { merge:true });
+        }
+        tx.set(doc(db,"applications",r.id), { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() }, { merge:true });
+      });
+      msg.style.color="var(--dancheong-blue)"; msg.textContent="수정되었습니다.";
+      setTimeout(closeEdit, 700);
+    }catch(e){ msg.textContent="수정 실패: "+(e.code||e.message||e); }
+    finally{ $("edSaveBtn").disabled=false; }
+  };
 
   /* ---------- 삭제 (원장 차감 포함) ---------- */
   function deleteOneRecord(rec){
@@ -1415,12 +1515,15 @@ function startApp(){
     if (fo) rows = rows.filter(r=>(r.operatorEmail||"")===fo);
     if(!rows.length){ alert("내보낼 데이터가 없습니다."); return; }
     const aoa = rows.map(r=>({
-      "신청일자": r.date, "이름": r.name, "생년월일": r.birth,
+      "신청일자": r.date, "입력시각": fmtTime(r.createdAt), "입력일시": fmtDateTime(r.createdAt),
+      "이름": r.name, "생년월일": r.birth,
       "거주구": r.district||"", "상세주소": r.address||"", "구매점포": r.store||"",
       "휴대폰번호": (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
       "구매금액": r.amount, "지급상품권": r.coupon,
       "예외지급": r.exception ? "예외" : "",
       "예외승인자": r.exception ? (r.approvedBy||"") : "",
+      "수정일시": fmtDateTime(r.editedAt),
+      "수정자": r.editedBy||"",
       "알림수신동의": r.marketing ? "동의" : "미동의",
       "입력담당자": r.operatorEmail||""
     }));
@@ -1461,7 +1564,7 @@ function startApp(){
       aoa.push({"신청일자":k,"이름":smap[k].n+"건","생년월일":won(smap[k].buy)+"원","거주구":won(smap[k].pay)+"원","상세주소":won(Math.round(smap[k].pay/5000))+"매"});
     });
     const ws = XLSX.utils.json_to_sheet(aoa);
-    ws["!cols"]=[{wch:12},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:10},{wch:10},{wch:12},{wch:22}];
+    ws["!cols"]=[{wch:12},{wch:10},{wch:20},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:16},{wch:10},{wch:10},{wch:10},{wch:22},{wch:20},{wch:22},{wch:12},{wch:22}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "페이백접수");
     XLSX.writeFile(wb, `페이백_${fy||"전체연도"}${fd?"_"+fd:""}${fg?"_"+fg:""}_${new Date().toISOString().slice(0,10)}.xlsx`);
