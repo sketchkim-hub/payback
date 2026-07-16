@@ -516,15 +516,20 @@
     <div id="editModal" class="modal-overlay">
       <div class="modal-card">
         <div class="modal-head">
-          <h3 style="font-family:'Gowun Batang',serif;margin:0;font-size:18px">상품권 금액 수정</h3>
+          <h3 style="font-family:'Gowun Batang',serif;margin:0;font-size:18px">접수 내역 수정</h3>
           <button id="editClose" class="modal-x">✕</button>
         </div>
         <div class="acct-info">
-          <div><span>이름</span><b id="edName">-</b></div>
           <div><span>신청일자</span><b id="edDate">-</b></div>
           <div><span>입력시각</span><b id="edTime">-</b></div>
+          <div><span>생년월일</span><b id="edBirth">-</b></div>
           <div><span>구매금액</span><b id="edAmount">-</b></div>
           <div><span>현재 지급액</span><b id="edCur">-</b></div>
+        </div>
+        <div class="modal-sec">
+          <h4>이름 수정</h4>
+          <input id="edName" type="text" placeholder="이름" autocomplete="off" />
+          <div class="hint" id="edNameHint">이름을 고치면 중복·누적 한도 기준도 함께 옮겨집니다.</div>
         </div>
         <div class="modal-sec">
           <h4>수정할 지급액</h4>
@@ -1384,13 +1389,15 @@ function startApp(){
     const r = records.find(x=>x.id===id); if(!r) return;
     if (!(isMaster || r.operatorUid===currentUid)){ alert("본인이 입력한 건만 수정할 수 있습니다."); return; }
     editingId = id;
-    $("edName").textContent = r.name;
+    $("edName").value = r.name || "";
     $("edDate").textContent = r.date||"-";
     $("edTime").textContent = fmtDateTime(r.createdAt) || "-";
+    $("edBirth").textContent = r.birth||"-";
     $("edAmount").textContent = won(r.amount)+"원";
     $("edCur").textContent = won(r.coupon)+"원";
     $("edValue").value = won(r.coupon);
     $("edMsg").style.color=""; $("edMsg").textContent="";
+    $("edNameHint").style.color=""; $("edNameHint").textContent="이름을 고치면 중복·누적 한도 기준도 함께 옮겨집니다.";
     $("edHint").textContent = `참고: 구매금액 ${won(r.amount)}원 기준 지급액은 ${won(couponFor(r.amount))}원입니다.`;
     editModal.classList.add("show");
   }
@@ -1407,29 +1414,64 @@ function startApp(){
   $("edSaveBtn").onclick = async ()=>{
     const r = records.find(x=>x.id===editingId); if(!r) return;
     const nv = Number(($("edValue").value||"").replace(/\D/g,""));
+    const nname = $("edName").value.trim();
     const msg = $("edMsg"); msg.style.color="";
+    if (cleanName(nname).length < 2){ msg.textContent="이름을 2글자 이상 입력하세요."; return; }
     if (!Number.isFinite(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
     if (nv % 5000 !== 0){ msg.textContent="실물이 5,000원권이므로 5,000원 단위로 입력하세요."; return; }
-    if (nv === (r.coupon||0)){ msg.textContent="현재 지급액과 같습니다."; return; }
+    const nameChanged = nname !== r.name;
+    if (nv === (r.coupon||0) && !nameChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
+
     const delta = nv - (r.coupon||0);
-    if (!confirm(`${r.name} 님의 지급액을 ${won(r.coupon)}원 → ${won(nv)}원으로 수정합니다.\n(누적 한도·예산도 함께 조정됩니다) 계속할까요?`)) return;
+    const oldLid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
+    // 이름이 바뀌면 중복키(이름+생년월일)가 바뀌므로 누적 원장을 새 키로 이전
+    let newDupKey = r.dupKey, newLid = oldLid, moveLedger = false, seedPaid = 0;
+    if (nameChanged){
+      newDupKey = await makeDupKey(nname, r.birth);
+      newLid = "ledger_" + newDupKey + "_" + yearOf(r.date);
+      moveLedger = (newLid !== oldLid);
+      if (moveLedger){
+        // 새 이름으로 이미 접수된 같은 사람의 기존 지급액(이 건 제외)
+        seedPaid = records.filter(x => x.id!==r.id && yearOf(x.date)===yearOf(r.date)
+          && cleanName(x.name)===cleanName(nname) && x.birth===r.birth)
+          .reduce((s,x)=>s+(x.coupon||0),0);
+      }
+    }
+    const parts = [];
+    if (nameChanged) parts.push(`이름: ${r.name} → ${nname}`);
+    if (delta !== 0) parts.push(`지급액: ${won(r.coupon)}원 → ${won(nv)}원`);
+    if (!confirm(`${r.name} 님 내역을 수정합니다.\n\n${parts.join("\n")}\n\n(누적 한도·예산도 함께 조정됩니다) 계속할까요?`)) return;
+
     $("edSaveBtn").disabled = true;
     try{
-      const lid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
       const budgetRef = r.date ? doc(db,"applications","budget_"+r.date) : null;
       await runTransaction(db, async (tx)=>{
-        let ls=null, bs=null;
-        if (lid) ls = await tx.get(doc(db,"applications",lid));
-        if (budgetRef) bs = await tx.get(budgetRef);
-        if (lid && ls.exists()){
-          const p = Math.max(0, (ls.data().paid||0) + delta);
-          tx.set(doc(db,"applications",lid), { paid:p }, { merge:true });
+        // 읽기 먼저 (트랜잭션 규칙)
+        const oldLs = oldLid ? await tx.get(doc(db,"applications",oldLid)) : null;
+        const newLs = moveLedger ? await tx.get(doc(db,"applications",newLid)) : null;
+        const bs = budgetRef ? await tx.get(budgetRef) : null;
+
+        if (moveLedger){
+          // 이전 이름 원장에서 이 건 금액 차감
+          if (oldLs && oldLs.exists()){
+            const p = Math.max(0, (oldLs.data().paid||0) - (r.coupon||0));
+            tx.set(doc(db,"applications",oldLid), { paid:p }, { merge:true });
+          }
+          // 새 이름 원장에 이 건 금액 반영 (없으면 기존 합계로 초기화)
+          const base = (newLs && newLs.exists()) ? (newLs.data().paid||0) : seedPaid;
+          tx.set(doc(db,"applications",newLid),
+            { ledger:true, paid: base + nv, dupKey:newDupKey, year: yearOf(r.date), updatedAt: serverTimestamp() }, { merge:true });
+        } else if (oldLid && oldLs && oldLs.exists() && delta !== 0){
+          const p = Math.max(0, (oldLs.data().paid||0) + delta);
+          tx.set(doc(db,"applications",oldLid), { paid:p }, { merge:true });
         }
-        if (budgetRef && bs.exists()){
+        if (budgetRef && bs && bs.exists() && delta !== 0){
           const iss = Math.max(0, (bs.data().issued||0) + delta);
           tx.set(budgetRef, { issued:iss }, { merge:true });
         }
-        tx.set(doc(db,"applications",r.id), { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() }, { merge:true });
+        const upd = { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() };
+        if (nameChanged){ upd.name = nname; upd.dupKey = newDupKey; upd.ledgerId = newLid; }
+        tx.set(doc(db,"applications",r.id), upd, { merge:true });
       });
       msg.style.color="var(--dancheong-blue)"; msg.textContent="수정되었습니다.";
       setTimeout(closeEdit, 700);
