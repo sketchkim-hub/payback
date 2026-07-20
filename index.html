@@ -605,7 +605,7 @@ function startApp(){
   let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0;
   let storeList = [], storeUnsub = null;
   const STORE_ID = "_stores";                  // 상인회 점포 명단 저장 문서(applications 내)
-  const STORE_CATS = ["농산물","수산물","축산물","가공식품","잡화","식당","서비스","기타"];
+  const STORE_CATS = ["농산물","수산물","축산물","가공식품","반찬","떡·방앗간","식당","의류","신발·가방","잡화","생활용품","화훼","서비스","기타"];
   const sName = s => (typeof s==="string" ? s : (s&&s.name)||"").trim();
   const sCat  = s => (typeof s==="string" ? "" : (s&&s.cat)||"").trim();
   const normStoreObj = s => ({ name:sName(s), cat:sCat(s) });
@@ -822,7 +822,11 @@ function startApp(){
 
   /* ---------- 상인회 점포 명단 (업종 포함) ---------- */
   const normStore = s => String(s||"").replace(/\s+/g,"").toLowerCase();
-  const catOptions = sel => ['<option value="">(업종 선택)</option>', ...STORE_CATS.map(c=>`<option value="${c}"${c===sel?" selected":""}>${c}</option>`)].join("");
+  const catOptions = sel => {
+    const base = STORE_CATS.slice();
+    if (sel && !base.includes(sel)) base.push(sel);   // 목록에 없는 기존 지정 업종도 보존
+    return ['<option value="">(업종 선택)</option>', ...base.map(c=>`<option value="${c}"${c===sel?" selected":""}>${c}</option>`)].join("");
+  };
   function findStore(name){ const nv=normStore(name); return storeList.find(s=>normStore(s.name)===nv); }
   function populateStoreDatalist(){
     const dl = $("storeOptions"); if(!dl) return;
