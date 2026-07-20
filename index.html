@@ -470,9 +470,10 @@
 
         <div class="modal-sec" id="storeSec" style="display:none">
           <h4>상인회 점포 명단 관리</h4>
-          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">엑셀 업로드 또는 직접 추가한 점포명이 입력창에서 자동완성·확인됩니다. <span id="storeCount">0</span>개 등록됨.</p>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input id="newStore" type="text" placeholder="점포명 직접 추가" style="flex:1;margin-bottom:0" autocomplete="off" />
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">엑셀(1열: 점포명, 2열: 업종) 업로드 또는 직접 추가한 점포가 입력창에서 자동완성됩니다. <span id="storeCount">0</span>곳 등록 · <span id="storeCatNote" style="color:var(--dancheong-red)"></span></p>
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <input id="newStore" type="text" placeholder="점포명 직접 추가" style="flex:1;min-width:120px;margin-bottom:0" autocomplete="off" />
+            <select id="newStoreCat" style="width:auto"></select>
             <button id="addStoreBtn" class="btn-sm btn-blue" style="color:#fff">추가</button>
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
@@ -480,7 +481,7 @@
             <input id="storeFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" />
             <button id="clearStoresBtn" class="btn-sm" style="background:var(--hanji-2);color:var(--dancheong-red)">전체 초기화</button>
           </div>
-          <div id="storeList" style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px"></div>
+          <div id="storeList" style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px"></div>
           <div id="storeMsg" class="err"></div>
         </div>
 
@@ -603,6 +604,10 @@ function startApp(){
   let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0;
   let storeList = [], storeUnsub = null;
   const STORE_ID = "_stores";                  // 상인회 점포 명단 저장 문서(applications 내)
+  const STORE_CATS = ["농산물","수산물","축산물","가공식품","잡화","식당","서비스","기타"];
+  const sName = s => (typeof s==="string" ? s : (s&&s.name)||"").trim();
+  const sCat  = s => (typeof s==="string" ? "" : (s&&s.cat)||"").trim();
+  const normStoreObj = s => ({ name:sName(s), cat:sCat(s) });
   let currentUid = null, currentEmail = "", isMaster = false, isApproved = false;
   let dynamicMasters = [], approvedOps = [], pendingOps = [];
   const bootstrapMasters = MASTER_EMAILS.map(e=>String(e||"").toLowerCase());
@@ -629,7 +634,7 @@ function startApp(){
         ()  => { dynamicMasters=[]; approvedOps=[]; pendingOps=[]; applyAccess(); });
       if (storeUnsub) storeUnsub();
       storeUnsub = onSnapshot(doc(db,"applications",STORE_ID),
-        snap => { storeList = (snap.exists() && Array.isArray(snap.data().stores) ? snap.data().stores : []).filter(Boolean); populateStoreDatalist(); if (acctModal.classList.contains("show")) renderStoreList(); checkStore(); },
+        snap => { storeList = (snap.exists() && Array.isArray(snap.data().stores) ? snap.data().stores : []).map(normStoreObj).filter(s=>s.name); populateStoreDatalist(); if (acctModal.classList.contains("show")) renderStoreList(); checkStore(); },
         ()  => { storeList = []; populateStoreDatalist(); });
     } else {
       currentUid = null; currentEmail = ""; isMaster = false; isApproved = false;
@@ -814,45 +819,63 @@ function startApp(){
     catch(e){ $("pendingMsg").textContent="승인 실패: "+(e.code||e.message); }
   };
 
-  /* ---------- 상인회 점포 명단 ---------- */
+  /* ---------- 상인회 점포 명단 (업종 포함) ---------- */
   const normStore = s => String(s||"").replace(/\s+/g,"").toLowerCase();
+  const catOptions = sel => ['<option value="">(업종 선택)</option>', ...STORE_CATS.map(c=>`<option value="${c}"${c===sel?" selected":""}>${c}</option>`)].join("");
+  function findStore(name){ const nv=normStore(name); return storeList.find(s=>normStore(s.name)===nv); }
   function populateStoreDatalist(){
     const dl = $("storeOptions"); if(!dl) return;
-    dl.innerHTML = storeList.map(s=>`<option value="${esc(s)}"></option>`).join("");
+    dl.innerHTML = storeList.map(s=>`<option value="${esc(s.name)}">${esc(s.cat)}</option>`).join("");
+    const ns = $("newStoreCat"); if(ns && !ns.dataset.init){ ns.innerHTML = catOptions(""); ns.dataset.init="1"; }
   }
   function checkStore(){
     const el = $("storeCheck"); if(!el) return;
     const v = $("fStore").value.trim();
     if (!v){ el.style.color=""; el.textContent = storeList.length ? `등록된 상인회 점포 ${storeList.length}곳 — 점포명 2~3글자 입력` : "등록된 점포가 없습니다. 관리자 설정에서 명단을 등록하세요."; return; }
+    const hit = findStore(v);
+    if (hit){ el.style.color="var(--dancheong-blue)"; el.textContent = `✓ 등록된 상인회 점포입니다${hit.cat?` · 업종: ${hit.cat}`:" (업종 미지정)"}`; return; }
     const nv = normStore(v);
-    if (storeList.some(s=>normStore(s)===nv)){ el.style.color="var(--dancheong-blue)"; el.textContent="✓ 등록된 상인회 점포입니다."; return; }
-    const hits = storeList.filter(s=>normStore(s).includes(nv));
-    if (hits.length){ el.style.color=""; el.textContent=`검색된 점포 ${hits.length}곳: ${hits.slice(0,5).join(", ")}${hits.length>5?" …":""} (목록에서 선택)`; }
+    const hits = storeList.filter(s=>normStore(s.name).includes(nv));
+    if (hits.length){ el.style.color=""; el.textContent=`검색된 점포 ${hits.length}곳: ${hits.slice(0,5).map(s=>s.name).join(", ")}${hits.length>5?" …":""} (목록에서 선택)`; }
     else { el.style.color="var(--dancheong-red)"; el.textContent="⚠ 등록된 점포명이 아닙니다. 확인 후 입력하세요."; }
   }
   $("fStore").addEventListener("input", checkStore);
 
   function renderStoreList(){
     $("storeCount").textContent = storeList.length;
+    const noCat = storeList.filter(s=>!s.cat).length;
+    $("storeCatNote").textContent = noCat ? `업종 미지정 ${noCat}곳` : (storeList.length ? "모든 점포 업종 지정 완료" : "");
     $("storeList").innerHTML = storeList.length
-      ? [...storeList].sort((a,b)=>a.localeCompare(b,"ko")).map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(s)}</span><button class="store-del" data-name="${esc(s)}" style="background:none;border:none;color:var(--dancheong-red);cursor:pointer;font-size:12px">삭제</button></div>`).join("")
+      ? [...storeList].sort((a,b)=>a.name.localeCompare(b.name,"ko")).map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line)">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</span>
+          <select class="store-cat" data-name="${esc(s.name)}" style="font-size:12px;padding:2px 4px;width:auto">${catOptions(s.cat)}</select>
+          <button class="store-del" data-name="${esc(s.name)}" style="background:none;border:none;color:var(--dancheong-red);cursor:pointer;font-size:12px">삭제</button>
+        </div>`).join("")
       : `<div class="hint" style="margin:0">등록된 점포가 없습니다.</div>`;
     $("storeList").querySelectorAll(".store-del").forEach(b=> b.onclick=()=>deleteStore(b.dataset.name));
+    $("storeList").querySelectorAll(".store-cat").forEach(sel=> sel.onchange=()=>setStoreCat(sel.dataset.name, sel.value));
   }
   async function saveStores(list){
-    const clean = [...new Set(list.map(s=>String(s||"").trim()).filter(Boolean))];
-    await setDoc(doc(db,"applications",STORE_ID), { config:true, stores:clean, updatedAt: serverTimestamp() }, { merge:true });
+    const map = new Map();
+    list.forEach(s=>{ const o=normStoreObj(s); if(!o.name) return; map.set(normStore(o.name), o); }); // 이름 기준 중복 제거(마지막 값 유지)
+    await setDoc(doc(db,"applications",STORE_ID), { config:true, stores:[...map.values()], updatedAt: serverTimestamp() }, { merge:true });
+  }
+  async function setStoreCat(name, cat){
+    $("storeMsg").style.color="";
+    try { await saveStores(storeList.map(s=> normStore(s.name)===normStore(name) ? {name:s.name, cat} : s)); }
+    catch(e){ $("storeMsg").textContent="업종 저장 실패: "+(e.code||e.message); }
   }
   async function deleteStore(name){
-    try { await saveStores(storeList.filter(s=>s!==name)); }
+    try { await saveStores(storeList.filter(s=>normStore(s.name)!==normStore(name))); }
     catch(e){ $("storeMsg").textContent="삭제 실패: "+(e.code||e.message); }
   }
   $("addStoreBtn").onclick = async ()=>{
     const v = $("newStore").value.trim();
+    const cat = $("newStoreCat").value;
     $("storeMsg").style.color="";
     if(!v){ $("storeMsg").textContent="점포명을 입력하세요."; return; }
-    if(storeList.some(s=>normStore(s)===normStore(v))){ $("storeMsg").textContent="이미 등록된 점포입니다."; return; }
-    try { await saveStores([...storeList, v]); $("newStore").value=""; $("storeMsg").style.color="var(--dancheong-blue)"; $("storeMsg").textContent="추가되었습니다."; }
+    if(findStore(v)){ $("storeMsg").textContent="이미 등록된 점포입니다."; return; }
+    try { await saveStores([...storeList, {name:v, cat}]); $("newStore").value=""; $("newStoreCat").value=""; $("storeMsg").style.color="var(--dancheong-blue)"; $("storeMsg").textContent="추가되었습니다."; }
     catch(e){ $("storeMsg").textContent="추가 실패: "+(e.code||e.message); }
   };
   $("clearStoresBtn").onclick = async ()=>{
@@ -861,26 +884,32 @@ function startApp(){
     try { await saveStores([]); $("storeMsg").style.color=""; $("storeMsg").textContent="명단을 초기화했습니다."; }
     catch(e){ $("storeMsg").textContent="초기화 실패: "+(e.code||e.message); }
   };
+  const isHeaderWord = t => /^(점포|점포명|상호|상호명|상점|가게|이름|번호|no|no\.|순번|업종|분류|카테고리|종류)$/i.test(t);
+  const matchCat = t => { const x=String(t||"").trim(); if(!x) return ""; const hit=STORE_CATS.find(c=>c===x||normStore(c)===normStore(x)); return hit || x; };
   $("storeFile").onchange = async (e)=>{
     const file = e.target.files[0]; if(!file) return;
     $("storeMsg").style.color=""; $("storeMsg").textContent="엑셀 읽는 중…";
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type:"array" });
-      let names = [];
+      let entries = [];
       wb.SheetNames.forEach(sn=>{
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1 });
-        rows.forEach(r=> (r||[]).forEach(cell=>{
-          const t = String(cell==null?"":cell).trim();
-          if (t) names.push(t);
-        }));
+        rows.forEach(r=>{
+          if(!r) return;
+          const name = String(r[0]==null?"":r[0]).trim();
+          const cat  = matchCat(r[1]);          // 2번째 열 = 업종(있으면)
+          if (name && !isHeaderWord(name)) entries.push({ name, cat });
+        });
       });
-      // 헤더로 보이는 단어 제거
-      names = names.filter(n=> !/^(점포|점포명|상호|상호명|상점|가게|이름|번호|no|no\.|순번)$/i.test(n));
-      const merged = [...new Set([...storeList, ...names].map(s=>s.trim()).filter(Boolean))];
+      // 기존 명단에 병합: 이름으로 매칭, 엑셀에 업종이 있으면 갱신, 없으면 기존 업종 유지
+      const map = new Map(storeList.map(s=>[normStore(s.name), {name:s.name, cat:s.cat}]));
+      entries.forEach(en=>{ const k=normStore(en.name); const prev=map.get(k); map.set(k, { name:en.name, cat: en.cat || (prev?prev.cat:"") }); });
+      const merged = [...map.values()];
       await saveStores(merged);
+      const withCat = merged.filter(s=>s.cat).length;
       $("storeMsg").style.color="var(--dancheong-blue)";
-      $("storeMsg").textContent = `${names.length}개 읽어 등록 (현재 ${merged.length}개). 중복은 자동 제외.`;
+      $("storeMsg").textContent = `${entries.length}행 반영 (현재 ${merged.length}곳, 업종 지정 ${withCat}곳). 이름 기준 중복은 자동 병합.`;
     } catch(err){ $("storeMsg").style.color=""; $("storeMsg").textContent="엑셀 처리 실패: "+(err.message||err); }
     finally { e.target.value=""; }
   };
@@ -1142,6 +1171,7 @@ function startApp(){
     const district = $("fDistrict").value;
     const address = $("fAddress").value.trim();
     const store = $("fStore").value.trim();
+    const storeCat = (findStore(store)||{}).cat || "";
     const marketing = $("fMarketing").checked;
     const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
     const date = $("fDate").value;
@@ -1167,7 +1197,7 @@ function startApp(){
 
     // 화면상 이미 한도 초과면 즉시 차단(서버 요청 전) — 예외 지급 버튼 제공
     if (CAP - paidClient <= 0){
-      showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
+      showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
       return;
     }
 
@@ -1186,12 +1216,12 @@ function startApp(){
         tx.set(ledgerRef, { ledger:true, paid: paid + g, dupKey, year: yr, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date, issued: (bs.exists()?(bs.data().issued||0):0) + g }, { merge:true });
         const recRef = doc(collection(db, "applications"));
-        tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
+        tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, storeCat, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
         return { blocked:false, paid, grant:g };
       });
 
       if (result.blocked){
-        showCapBlocked(result.paid, { date, name, birth, phoneRaw, district, address, store, marketing, amount, tier, dupKey, ledgerId, yr, paid:result.paid }, diffPhone);
+        showCapBlocked(result.paid, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:result.paid }, diffPhone);
         return;
       }
       const { paid, grant } = result;
@@ -1243,7 +1273,7 @@ function startApp(){
         tx.set(ledgerRef, { ledger:true, paid: paid + p.tier, dupKey:p.dupKey, year:p.yr, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date:p.date, issued: (bs.exists()?(bs.data().issued||0):0) + p.tier }, { merge:true });
         const recRef = doc(collection(db, "applications"));
-        tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store,
+        tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store, storeCat:p.storeCat,
           amount:p.amount, coupon:p.tier, marketing:p.marketing, dupKey:p.dupKey, ledgerId:p.ledgerId,
           operatorUid: currentUid, operatorEmail: currentEmail, exception:true, approvedBy: currentEmail, createdAt: serverTimestamp() });
       });
@@ -1559,7 +1589,7 @@ function startApp(){
     const aoa = rows.map(r=>({
       "신청일자": r.date, "입력시각": fmtTime(r.createdAt), "입력일시": fmtDateTime(r.createdAt),
       "이름": r.name, "생년월일": r.birth,
-      "거주구": r.district||"", "상세주소": r.address||"", "구매점포": r.store||"",
+      "거주구": r.district||"", "상세주소": r.address||"", "구매점포": r.store||"", "업종": r.storeCat||"",
       "휴대폰번호": (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
       "구매금액": r.amount, "지급상품권": r.coupon,
       "예외지급": r.exception ? "예외" : "",
@@ -1605,8 +1635,15 @@ function startApp(){
     Object.keys(smap).sort((a,b)=>smap[b].pay-smap[a].pay).forEach(k=>{
       aoa.push({"신청일자":k,"이름":smap[k].n+"건","생년월일":won(smap[k].buy)+"원","거주구":won(smap[k].pay)+"원","상세주소":won(Math.round(smap[k].pay/5000))+"매"});
     });
+    // 업종별 집계
+    aoa.push({});
+    aoa.push({"신청일자":"── 업종별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액","상세주소":"5천원권"});
+    const cmap={}; rows.forEach(r=>{const k=(r.storeCat&&r.storeCat.trim())||"(업종 미지정)"; cmap[k]=cmap[k]||{n:0,buy:0,pay:0}; cmap[k].n++; cmap[k].buy+=(r.amount||0); cmap[k].pay+=(r.coupon||0);});
+    Object.keys(cmap).sort((a,b)=>cmap[b].pay-cmap[a].pay).forEach(k=>{
+      aoa.push({"신청일자":k,"이름":cmap[k].n+"건","생년월일":won(cmap[k].buy)+"원","거주구":won(cmap[k].pay)+"원","상세주소":won(Math.round(cmap[k].pay/5000))+"매"});
+    });
     const ws = XLSX.utils.json_to_sheet(aoa);
-    ws["!cols"]=[{wch:12},{wch:10},{wch:20},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:16},{wch:10},{wch:10},{wch:10},{wch:22},{wch:20},{wch:22},{wch:12},{wch:22}];
+    ws["!cols"]=[{wch:12},{wch:10},{wch:20},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:10},{wch:16},{wch:10},{wch:10},{wch:10},{wch:22},{wch:20},{wch:22},{wch:12},{wch:22}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "페이백접수");
     XLSX.writeFile(wb, `페이백_${fy||"전체연도"}${fd?"_"+fd:""}${fg?"_"+fg:""}_${new Date().toISOString().slice(0,10)}.xlsx`);
