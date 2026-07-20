@@ -479,6 +479,7 @@
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
             <label for="storeFile" class="btn-sm" style="background:var(--dancheong-blue);color:#fff;cursor:pointer;margin:0">엑셀 업로드</label>
             <input id="storeFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" />
+            <button id="downStoresBtn" class="btn-sm" style="background:var(--dancheong-teal,var(--dancheong-blue));color:#fff">엑셀 내려받기</button>
             <button id="clearStoresBtn" class="btn-sm" style="background:var(--hanji-2);color:var(--dancheong-red)">전체 초기화</button>
           </div>
           <div id="storeList" style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px"></div>
@@ -883,6 +884,17 @@ function startApp(){
     if(!confirm(`점포 명단 ${storeList.length}개를 모두 삭제할까요?`)) return;
     try { await saveStores([]); $("storeMsg").style.color=""; $("storeMsg").textContent="명단을 초기화했습니다."; }
     catch(e){ $("storeMsg").textContent="초기화 실패: "+(e.code||e.message); }
+  };
+  $("downStoresBtn").onclick = ()=>{
+    if(!storeList.length){ $("storeMsg").style.color=""; $("storeMsg").textContent="내려받을 점포가 없습니다."; return; }
+    const aoa = [...storeList].sort((a,b)=>a.name.localeCompare(b.name,"ko")).map(s=>({ "점포명": s.name, "업종": s.cat||"" }));
+    const ws = XLSX.utils.json_to_sheet(aoa, { header:["점포명","업종"] });
+    ws["!cols"] = [{wch:24},{wch:12}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "점포명단");
+    const d = new Date();
+    XLSX.writeFile(wb, `상인회_점포명단_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.xlsx`);
+    $("storeMsg").style.color="var(--dancheong-blue)"; $("storeMsg").textContent=`${storeList.length}곳을 엑셀로 내려받았습니다. 업종(B열)을 채워 다시 업로드하세요.`;
   };
   const isHeaderWord = t => /^(점포|점포명|상호|상호명|상점|가게|이름|번호|no|no\.|순번|업종|분류|카테고리|종류)$/i.test(t);
   const matchCat = t => { const x=String(t||"").trim(); if(!x) return ""; const hit=STORE_CATS.find(c=>c===x||normStore(c)===normStore(x)); return hit || x; };
