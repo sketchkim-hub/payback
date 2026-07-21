@@ -559,7 +559,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
   sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment }
+import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, getDocs, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ===================================================================
@@ -1081,18 +1081,36 @@ function startApp(){
     const cn = cleanName(name), yr = yearOf($("fDate").value);
     return records.filter(x => cleanName(x.name)===cn && x.birth===birth && yearOf(x.date)===yr);
   }
+  /* 공용 데이터로 누적 수령액을 조회 — 다른 담당자·지난 회차 입력분까지 정확히 반영.
+     ① 공용 원장(ledger) 문서(모든 담당자가 읽기 가능) ② 접수문서 합산 ③ 화면 캐시 순으로 권위값 산출 */
+  async function authPaid(name, birth, year){
+    const key = await makeDupKey(name, birth);
+    let paidLedger = null, recs = null;
+    try {
+      const ls = await getDoc(doc(db,"applications","ledger_"+key+"_"+year));
+      if (ls.exists()) paidLedger = ls.data().paid||0;
+    } catch(_){}
+    try {
+      const qs = await getDocs(query(collection(db,"applications"), where("dupKey","==",key)));
+      recs = qs.docs.map(d=>({id:d.id,...d.data()})).filter(r=>!r.ledger && !r.config && yearOf(r.date)===year);
+    } catch(_){ recs = null; }   // 엄격한 보안규칙에서 실패하면 원장/캐시로 대체
+    if (!recs) recs = matchByNameBirth(name, birth);
+    const paidRecs = recs.reduce((s,r)=>s+(r.coupon||0),0);
+    const paid = Math.max(paidLedger!=null?paidLedger:0, paidRecs);   // 권위값(더 큰 쪽)
+    return { key, paid, recs };
+  }
+  let eligTimer=null, eligToken=0, lastAuth=null;
   function updatePreview(){
     const el = $("couponPreview");
     const elig = $("eligCheck");
-    const box = $("historyBox"); box.className="histbox";
     const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
     const tier = couponFor(amount);
     const name = $("fName").value.trim();
     const birth = getBirth();
-    const phone = digitsOnly($("fPhone").value);
     const cn = cleanName(name);
     const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
     const nameBirthReady = cn.length>=2 && birth && birth!=="INVALID";
+    const year = yearOf($("fDate").value);
 
     // 구매금액 안내(항상 갱신)
     if (!amount) el.innerHTML = "금액을 입력하면 지급될 상품권이 표시됩니다.";
@@ -1101,6 +1119,8 @@ function startApp(){
 
     // 이름+생년월일 준비 전 → 배너는 안내만
     if (!nameBirthReady){
+      lastAuth = null;
+      $("historyBox").className="histbox";
       elig.className = "hint"; elig.removeAttribute("style");
       elig.textContent = (cn.length>=1 && !(birth && birth!=="INVALID"))
         ? "생년월일까지 입력하면 환급 가능 여부가 표시됩니다."
@@ -1108,9 +1128,28 @@ function startApp(){
       return;
     }
 
-    // 이름+생년월일 준비됨 → 환급 가능 여부를 배너에 표시(금액과 무관)
-    const matches = matchByNameBirth(name, birth);
-    const paid = matches.reduce((s,x)=>s+(x.coupon||0),0);
+    // 같은 사람이면 재조회 없이 즉시 렌더(금액만 바뀐 경우 등)
+    if (lastAuth && lastAuth.name===name && lastAuth.birth===birth && lastAuth.year===year){
+      renderElig(lastAuth); return;
+    }
+    // 공용 데이터 조회(디바운스) — 다른 담당자·지난 회차 입력분까지 반영
+    elig.className = "hint"; elig.removeAttribute("style"); elig.textContent = "환급 가능 여부 확인 중…";
+    clearTimeout(eligTimer);
+    const myToken = ++eligToken;
+    eligTimer = setTimeout(async ()=>{
+      const data = await authPaid(name, birth, year);
+      if (myToken !== eligToken) return;          // 조회 중 입력이 바뀌면 무시
+      lastAuth = { ...data, name, birth, year };
+      renderElig(lastAuth);
+    }, 350);
+  }
+  function renderElig(data){
+    const elig = $("eligCheck"), box = $("historyBox"); box.className="histbox";
+    const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
+    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
+    const tier = couponFor(amount);
+    const phone = digitsOnly($("fPhone").value);
+    const { name, birth, year, paid, recs } = data;
     const remaining = PAYOUT_CAP - paid;
     const grant = amount>0 ? Math.max(0, Math.min(tier, remaining)) : 0;
 
@@ -1128,18 +1167,17 @@ function startApp(){
     }
     elig.innerHTML = head;
 
-    // 기존 수령 내역 패널
-    if (matches.length>0){
-      const items = [...matches].sort((a,b)=>(a.date>b.date?1:-1)).map(x=>
+    if (recs && recs.length>0){
+      const items = [...recs].sort((a,b)=>(a.date>b.date?1:-1)).map(x=>
         `<div class="h-item"><span>${esc(x.date)} · ${esc(x.district||"-")}</span><span>${won(x.coupon)}원</span></div>`).join("");
-      const diffPhone = phone && matches.some(x=> digitsOnly(x.phone)!==phone);
+      const diffPhone = phone && recs.some(x=> digitsOnly(x.phone) && digitsOnly(x.phone)!==phone);
       const warn = remaining<=0
         ? `<div class="h-warn">⚠ 누적 한도(${won(PAYOUT_CAP)}원) 도달 — 더 이상 지급할 수 없습니다.</div>`
         : (amount>0 && tier>0 && grant<tier ? `<div class="h-warn">⚠ 남은 한도가 ${won(remaining)}원이라 이번엔 ${won(grant)}원만 지급됩니다.</div>` : "");
       const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인 여부를 확인하세요.</div>` : "";
       box.className = "histbox show" + (remaining<=0?" cap":"");
       box.innerHTML =
-        `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · ${esc(yearOf($("fDate").value))}년 수령 내역</div>`
+        `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · ${esc(year)}년 수령 내역</div>`
         + items
         + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원 / 남은 한도 ${won(Math.max(0,remaining))}원</span></div>`
         + (remaining>0 && amount>0 ? `<div class="h-next">이번 지급 예정: ${won(grant)}원 (지급 시 누적 ${won(paid+grant)}원 / 잔여 ${won(remaining-grant)}원)</div>` : "")
@@ -1181,6 +1219,7 @@ function startApp(){
     $("fConsent").checked=false; $("fMarketing").checked=false;
     $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
     const eg=$("eligCheck"); eg.className="hint"; eg.removeAttribute("style"); eg.textContent="이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.";
+    lastAuth = null;
     $("historyBox").className="histbox"; $("historyBox").innerHTML="";
     checkStore();
     if (clearMsg){ const e=$("entryResult"); e.className="result"; e.innerHTML=""; }
@@ -1218,16 +1257,15 @@ function startApp(){
     if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
 
     const dupKey = await makeDupKey(name, birth);
-    // 누적 대조: 같은 연도 + 이름(정규화)·생년월일 일치 (전화번호 무관 — 동일인 판정)
     const yr = yearOf(date);
-    const prior = records.filter(x =>
-      yearOf(x.date)===yr && cleanName(x.name)===cleanName(name) && x.birth===birth);
     const CAP = PAYOUT_CAP;                               // 1인 연도별 누적 지급 한도
-    const paidClient = prior.reduce((s,x)=> s + (x.coupon||0), 0);   // 화면 캐시 기준(빠른 안내용)
+    // 공용 데이터로 누적 조회 — 다른 담당자·지난 회차 입력분까지 반영(화면 캐시에만 의존하지 않음)
+    const authInfo = await authPaid(name, birth, yr);
+    const paidClient = authInfo.paid;
     const ledgerId = "ledger_" + dupKey + "_" + yr;      // 사람×연도별 누적 원장
-    const diffPhone = prior.some(x => digitsOnly(x.phone) && digitsOnly(x.phone)!==phoneRaw);
+    const diffPhone = (authInfo.recs||[]).some(x => digitsOnly(x.phone) && digitsOnly(x.phone)!==phoneRaw);
 
-    // 화면상 이미 한도 초과면 즉시 차단(서버 요청 전) — 예외 지급 버튼 제공
+    // 이미 한도 초과면 즉시 차단(서버 요청 전) — 예외 지급 버튼 제공
     if (CAP - paidClient <= 0){
       showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
       return;
