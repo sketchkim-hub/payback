@@ -321,7 +321,7 @@
           <div class="field wide">
             <label for="fAmount">구매금액 (원)</label>
             <input id="fAmount" type="text" inputmode="numeric" placeholder="예: 35,000" autocomplete="off" />
-            <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
+            <div class="hint" id="couponPreview">이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.</div>
           </div>
 
           <div class="wide"><div id="historyBox" class="histbox"></div></div>
@@ -1087,47 +1087,55 @@ function startApp(){
     const phone = digitsOnly($("fPhone").value);
     const cn = cleanName(name);
     const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
+    const nameBirthReady = cn.length>=2 && birth && birth!=="INVALID";
 
-    if (!amount){ el.innerHTML = "금액을 입력하면 지급될 상품권이 표시됩니다."; return; }
-    if (tier===0){ el.innerHTML = `3만원 이상 구매 시 상품권이 지급됩니다. (입력: ${won(amount)}원)`; return; }
-
-    // 이름+생년월일이 있으면 누적 한도 반영
-    if (cn && birth && birth!=="INVALID"){
+    // 1) 이름+생년월일이 준비되면 → 금액과 무관하게 '환급 가능 여부'부터 표시
+    if (nameBirthReady){
       const matches = matchByNameBirth(name, birth);
       const paid = matches.reduce((s,x)=>s+(x.coupon||0),0);
       const remaining = PAYOUT_CAP - paid;
-      const grant = Math.max(0, Math.min(tier, remaining));
+      const grant = amount>0 ? Math.max(0, Math.min(tier, remaining)) : 0;
 
-      // 한 줄 요약
+      // 환급 가능 여부 한 줄
+      let head;
       if (remaining<=0){
-        el.innerHTML = `<b style="color:${col10}">지급 한도(${won(PAYOUT_CAP)}원) 초과</b> · 기존 ${won(paid)}원 수령 → 추가 지급 불가`;
+        head = `<b style="color:${col10}">✗ 환급 불가</b> · 한도(${won(PAYOUT_CAP)}원)를 모두 수령한 고객입니다.`;
       } else if (paid>0){
-        el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원</b>`
-          + ` <span style="color:var(--ink-soft)">· 기존 ${won(paid)}원 / 잔여한도 ${won(remaining)}원</span>`;
+        head = `<b style="color:${col5}">✓ 환급 가능</b> · 남은 한도 <b>${won(remaining)}원</b> <span style="color:var(--ink-soft)">(기존 ${won(paid)}원 수령)</span>`;
       } else {
-        el.innerHTML = `지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원 상품권</b>`;
+        head = `<b style="color:${col5}">✓ 환급 가능</b> · 첫 접수 <span style="color:var(--ink-soft)">(한도 ${won(PAYOUT_CAP)}원)</span>`;
       }
+      // 금액이 입력되면 이번 지급 예정액도 덧붙임
+      if (amount>0 && remaining>0){
+        if (tier===0) head += `<br><span style="color:var(--ink-soft)">3만원 이상 구매 시 지급 (입력 ${won(amount)}원)</span>`;
+        else head += `<br>이번 지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원</b>${grant<tier?` <span style="color:${col10}">(남은 한도만큼만)</span>`:""}`;
+      }
+      el.innerHTML = head;
 
-      // 이름 3글자 이상 + 기존 내역 있으면 상세 패널 표시
-      if (cn.length>=3 && matches.length>0){
+      // 기존 수령 내역 패널
+      if (matches.length>0){
         const items = [...matches].sort((a,b)=>(a.date>b.date?1:-1)).map(x=>
           `<div class="h-item"><span>${esc(x.date)} · ${esc(x.district||"-")}</span><span>${won(x.coupon)}원</span></div>`).join("");
         const diffPhone = phone && matches.some(x=> digitsOnly(x.phone)!==phone);
         const warn = remaining<=0
           ? `<div class="h-warn">⚠ 누적 한도(${won(PAYOUT_CAP)}원) 도달 — 더 이상 지급할 수 없습니다.</div>`
-          : (grant<tier ? `<div class="h-warn">⚠ 남은 한도가 ${won(remaining)}원이라 이번엔 ${won(grant)}원만 지급됩니다.</div>` : "");
+          : (amount>0 && tier>0 && grant<tier ? `<div class="h-warn">⚠ 남은 한도가 ${won(remaining)}원이라 이번엔 ${won(grant)}원만 지급됩니다.</div>` : "");
         const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인 여부를 확인하세요.</div>` : "";
         box.className = "histbox show" + (remaining<=0?" cap":"");
         box.innerHTML =
           `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · ${esc(yearOf($("fDate").value))}년 수령 내역</div>`
           + items
-          + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원</span></div>`
-          + (remaining>0 ? `<div class="h-next">이번 지급 예정: ${won(grant)}원 (지급 시 누적 ${won(paid+grant)}원 / 잔여 ${won(remaining-grant)}원)</div>` : "")
+          + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원 / 남은 한도 ${won(Math.max(0,remaining))}원</span></div>`
+          + (remaining>0 && amount>0 ? `<div class="h-next">이번 지급 예정: ${won(grant)}원 (지급 시 누적 ${won(paid+grant)}원 / 잔여 ${won(remaining-grant)}원)</div>` : "")
           + warn + phoneWarn;
       }
       return;
     }
-    // 이름/생년월일 아직 → 구매금액 기준 금액만
+
+    // 2) 이름·생년월일 미완성 → 안내
+    if (cn.length>=1 && !(birth && birth!=="INVALID")){ el.innerHTML = "생년월일까지 입력하면 환급 가능 여부가 표시됩니다."; return; }
+    if (!amount){ el.innerHTML = "이름과 생년월일을 입력하면 환급 가능 여부가 표시됩니다."; return; }
+    if (tier===0){ el.innerHTML = `3만원 이상 구매 시 상품권이 지급됩니다. (입력: ${won(amount)}원)`; return; }
     el.innerHTML = `지급 예정: <b style="color:${tier>=10000?col10:col5}">${won(tier)}원 상품권</b>`
       + ` <span style="color:var(--ink-soft)">(이름·생년월일 입력 시 한도 반영)</span>`;
   }
@@ -1164,7 +1172,7 @@ function startApp(){
     ["fName","fPhone","fAmount","fAddress","fStore"].forEach(id=>$(id).value="");
     clearBirth(); $("fDistrict").value="";
     $("fConsent").checked=false; $("fMarketing").checked=false;
-    $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
+    $("couponPreview").textContent="이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.";
     $("historyBox").className="histbox"; $("historyBox").innerHTML="";
     checkStore();
     if (clearMsg){ const e=$("entryResult"); e.className="result"; e.innerHTML=""; }
