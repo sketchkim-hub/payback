@@ -278,7 +278,8 @@
 
           <div class="field">
             <label for="fDate">신청일자</label>
-            <input id="fDate" type="date" />
+            <input id="fDate" type="date" min="2026-11-06" max="2026-11-07" />
+            <div class="hint">행사 기간은 2026년 11월 6일과 7일입니다.</div>
           </div>
 
           <div class="field">
@@ -342,7 +343,8 @@
               <summary>수집 항목 및 안내 보기</summary>
               <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
                  • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
-                 • 지급 기준: 3만원 이상 구매 시 10,000원 환급, 1인 연 1회(1만원). 같은 해에 이미 받았거나 같은 휴대폰으로 받은 기록이 있으면 다시 지급하지 않습니다.<br>
+                 • 행사 기간: 2026년 11월 6일, 11월 7일. 이 이틀에만 접수됩니다.<br>
+                 • 지급 기준: 3만원 이상 구매 시 10,000원 환급, 1인 연 1회(1만원). 같은 해에 이미 받았거나 같은 휴대폰으로 받은 기록이 있으면 다시 지급하지 않습니다. 하루 예산은 2,500,000원입니다.<br>
                  • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
                  • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
                  • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
@@ -473,9 +475,9 @@
 
         <div class="modal-sec" id="budgetSec" style="display:none">
           <h4>일일 예산 한도</h4>
-          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">하루 상품권 지급 예산입니다. 신청일자의 지급액이 이 한도를 넘으면 접수가 되지 않습니다. 1만원이 들어가지 않는 잔액도 막힙니다.</p>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">하루 상품권 지급 예산은 2,500,000원입니다. 신청일자의 지급액이 이 한도를 넘으면 접수가 되지 않습니다. 더 낮게만 줄일 수 있습니다.</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <input id="budgetInput" type="text" inputmode="numeric" placeholder="예: 3,000,000" style="flex:1;min-width:140px;margin-bottom:0" autocomplete="off" />
+            <input id="budgetInput" type="text" inputmode="numeric" placeholder="예: 2,500,000" style="flex:1;min-width:140px;margin-bottom:0" autocomplete="off" />
             <span style="font-size:13px;color:var(--ink-soft)">원</span>
             <button id="budgetSaveBtn" class="btn-sm btn-blue" style="color:#fff">저장</button>
           </div>
@@ -577,11 +579,12 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, getDocs, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { PAYOUT_AMOUNT, PAYOUT_CAP, DEFAULT_DAILY_BUDGET, MAX_PURCHASE, MIN_PURCHASE,
+import { PAYOUT_AMOUNT, PAYOUT_CAP, DEFAULT_DAILY_BUDGET, DAILY_BUDGET_CAP, MAX_PURCHASE, MIN_PURCHASE,
   won, cleanName, digitsOnly, yearOf, makeDupKey, isValidPhone,
   personDocId, legacyLockId, phoneLockId, ledgerDocId, exceptionDocId,
   isPayoutRecord, samePerson, decidePayout, validateEntry, summarizeVouchers,
-  budgetStatusText, blockTitle, phoneConflict }
+  budgetStatusText, blockTitle, phoneConflict, effectiveDailyBudget,
+  EVENT_DATES, defaultEventDate }
   from "./policy.js";
 
 /* ===================================================================
@@ -597,7 +600,7 @@ const FIREBASE_CONFIG = {
 };
 const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
 const MARKET_NAME = "문창백년전통시장";            // 화면 표기용(자유 변경)
-const DAILY_BUDGET = DEFAULT_DAILY_BUDGET;        // 하루 지급 예산(원). 넘으면 접수를 막는다. 대표가 화면에서 바꿀 수 있다.
+const DAILY_BUDGET = DEFAULT_DAILY_BUDGET;        // 하루 지급 예산 상한 2,500,000원. 대표는 더 낮게만 줄일 수 있다.
 const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). firestore.rules 의 부트스트랩 메일과 같아야 한다.
 /* =================================================================== */
 
@@ -610,7 +613,7 @@ const fmtTime = ts => { const d=tsDate(ts); return d ? `${p2(d.getHours())}:${p2
 const fmtDateTime = ts => { const d=tsDate(ts); return d ? `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : ""; };
 const show = id => { document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $(id).classList.add("active"); };
 
-document.getElementById("marketName").textContent = MARKET_NAME + " · 상품권 지급 접수";
+document.getElementById("marketName").textContent = MARKET_NAME + " · 2026.11.6–7 지급 접수";
 
 // 설정 미완료 감지
 if (FIREBASE_CONFIG.apiKey.startsWith("여기에")) {
@@ -626,7 +629,7 @@ function startApp(){
   const col = collection(db, "applications");
 
   let records = [];     // 실시간 캐시
-  let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0;
+  let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0, budgetWatchDate = "";
   let dailyBudget = DAILY_BUDGET;              // 일일 예산 한도(설정에서 변경 가능, Firebase 공유)
   let storeList = [], storeUnsub = null;
   const STORE_ID = "_stores";                  // 상인회 점포 명단 저장 문서(applications 내)
@@ -654,7 +657,7 @@ function startApp(){
           dynamicMasters = (Array.isArray(d.masters)? d.masters:[]).map(e=>String(e||"").toLowerCase());
           approvedOps   = (Array.isArray(d.approved)? d.approved:[]).map(e=>String(e||"").toLowerCase());
           pendingOps    = (Array.isArray(d.pending)? d.pending:[]).map(e=>String(e||"").toLowerCase());
-          dailyBudget   = (typeof d.dailyBudget==="number" && d.dailyBudget>0) ? d.dailyBudget : DEFAULT_DAILY_BUDGET;
+          dailyBudget   = effectiveDailyBudget(d.dailyBudget);
           applyAccess();
           renderBudgetBar(); renderStats();
           if (acctModal.classList.contains("show")){ renderMasterList(); renderPendingList(); renderBudgetSetting(); }
@@ -671,6 +674,7 @@ function startApp(){
       if (cfgUnsub) { cfgUnsub(); cfgUnsub=null; }
       if (storeUnsub) { storeUnsub(); storeUnsub=null; }
       if (budgetUnsub) { budgetUnsub(); budgetUnsub=null; }
+      budgetWatchDate = "";
       clearTimeout(idleTimer);
       show("loginScreen");
     }
@@ -700,9 +704,12 @@ function startApp(){
   }
 
   /* ---------- 오늘 예산 실시간 구독 ---------- */
-  function subscribeBudget(){
-    if (budgetUnsub) return;                     // 이미 구독 중
-    const bref = doc(db,"applications","budget_"+todayStr());
+  function subscribeBudget(date){
+    const d = date || ($("fDate") && $("fDate").value) || defaultEventDate(todayStr());
+    if (budgetUnsub && budgetWatchDate === d) return;
+    if (budgetUnsub) { budgetUnsub(); budgetUnsub = null; }
+    budgetWatchDate = d;
+    const bref = doc(db,"applications","budget_"+d);
     budgetUnsub = onSnapshot(bref,
       snap => { todayBudget = (snap.exists() && snap.data().issued) ? snap.data().issued : 0; renderBudgetBar(); },
       ()   => { todayBudget = 0; renderBudgetBar(); });
@@ -712,8 +719,9 @@ function startApp(){
     const st = budgetStatusText(todayBudget, dailyBudget);
     const pct = st.limit ? Math.min(100, Math.round(st.used/st.limit*100)) : 0;
     const barColor = st.blocked ? "var(--dancheong-red)" : pct>=80 ? "#d9822b" : "var(--dancheong-blue)";
+    const labelDate = budgetWatchDate || defaultEventDate(todayStr());
     el.innerHTML = `
-      <div class="bhead"><span><b>오늘 상품권 지급</b> (${todayStr()})</span><span><b>${won(st.used)}</b> / ${won(st.limit)}원</span></div>
+      <div class="bhead"><span><b>${labelDate} 상품권 지급</b></span><span><b>${won(st.used)}</b> / ${won(st.limit)}원</span></div>
       <div class="btrack"><div class="bfill" style="width:${pct}%;background:${barColor}"></div></div>
       <div class="bsub">${st.line}</div>`;
   }
@@ -859,6 +867,7 @@ function startApp(){
     const v = Number(($("budgetInput").value||"").replace(/\D/g,""));
     const msg=$("budgetMsg"); msg.style.color="";
     if(!Number.isFinite(v) || v<=0){ msg.textContent="0보다 큰 금액을 입력하세요."; return; }
+    if(v > DAILY_BUDGET_CAP){ msg.textContent=`하루 예산은 ${won(DAILY_BUDGET_CAP)}원까지입니다.`; return; }
     try {
       await setDoc(doc(db,"applications",CFG_ID), { config:true, dailyBudget:v, updatedAt: serverTimestamp() }, { merge:true });
       msg.style.color="var(--dancheong-blue)"; msg.textContent=`일일 예산을 ${won(v)}원으로 저장했습니다.`;
@@ -1138,7 +1147,9 @@ function startApp(){
 
   /* ---------- 기본값 ---------- */
   function todayDefaults(){
-    const t = todayStr();
+    const t = defaultEventDate(todayStr());
+    $("fDate").min = EVENT_DATES[0];
+    $("fDate").max = EVENT_DATES[EVENT_DATES.length - 1];
     $("fDate").value = t; $("statDate").value = t; $("dataDate").value = "";
   }
 
@@ -1296,7 +1307,7 @@ function startApp(){
     }
   }
   ["fName","fPhone","fAmount","fDate"].forEach(id => $(id).addEventListener("input", updatePreview));
-  $("fDate").addEventListener("change", updatePreview);
+  $("fDate").addEventListener("change", ()=>{ subscribeBudget($("fDate").value); updatePreview(); });
   [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
 
   /* ---------- 휴대폰 번호 자동 하이픈 (010-1234-5678) ---------- */
@@ -1516,14 +1527,12 @@ function startApp(){
     const op = isMaster ? $("statOperator").value : "";
     const dayMode = $("statScope").value!=="all";
     const statDate = $("statDate").value;
+    const focusDate = (dayMode && statDate) ? statDate : (budgetWatchDate || defaultEventDate(todayStr()));
     let issuedForRemain = todayBudget;
-    let remainNote = `오늘(${todayStr()}) 하루 예산 ${won(dailyBudget)}원 기준`;
-    if (dayMode && statDate && statDate!==todayStr() && isMaster){
-      issuedForRemain = records.filter(r=>r.date===statDate).reduce((s,r)=>s+(Number(r.coupon)||0),0);
-      remainNote = `${statDate} · 하루 예산 ${won(dailyBudget)}원 기준`;
-    } else if (dayMode && statDate===todayStr()){
-      remainNote = `오늘 하루 예산 ${won(dailyBudget)}원 기준`;
-    }
+    let remainNote = `${focusDate} 하루 예산 ${won(dailyBudget)}원 기준`;
+    if (focusDate === budgetWatchDate) issuedForRemain = todayBudget;
+    else if (isMaster) issuedForRemain = records.filter(r=>r.date===focusDate).reduce((s,r)=>s+(Number(r.coupon)||0),0);
+    else remainNote = `${budgetWatchDate || focusDate} 하루 예산 ${won(dailyBudget)}원 기준`;
     const remain = budgetStatusText(issuedForRemain, dailyBudget);
     // 라벨: 대표는 전체/선택 담당자, 담당자는 '내 접수'
     $("statScopeLabel").textContent = !isMaster ? "내 신청 인원" : (op ? "신청 인원("+op+")" : "신청 인원(전체)");
@@ -1881,7 +1890,7 @@ function startApp(){
     aoa.push({"신청일자":"상품권(5천원권)","이름":vouchers.sheetLabel+"매","생년월일":vouchers.note});
     aoa.push({"신청일자":"구매금액 합계","이름":won(totalBuy)+"원"});
     aoa.push({"신청일자":"지급금액 합계","이름":won(vouchers.total)+"원"});
-    aoa.push({"신청일자":"오늘 남은 예산","이름":(todayLeft.remaining>=0?won(todayLeft.remaining):"초과 "+won(-todayLeft.remaining))+"원","생년월일":todayStr()+" 전체 기준. 기간을 묶어 뽑은 합계에서 하루 예산을 빼지 않습니다."});
+    aoa.push({"신청일자":"남은 예산","이름":(todayLeft.remaining>=0?won(todayLeft.remaining):"초과 "+won(-todayLeft.remaining))+"원","생년월일":(budgetWatchDate||defaultEventDate(todayStr()))+" 하루 예산 "+won(dailyBudget)+"원 기준"});
     aoa.push({"신청일자":"알림수신 동의","이름":rows.filter(r=>r.marketing).length+"명"});
     // 계정(담당자)별 집계 — 대표 관리자만
     if (isMaster){

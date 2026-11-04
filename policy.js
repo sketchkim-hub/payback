@@ -14,8 +14,27 @@ export const MAX_PURCHASE = 10000000;
 export const PAYOUT_AMOUNT = 10000;
 export const PAYOUT_CAP = 10000;
 export const VOUCHER_UNIT = 5000;
-export const DEFAULT_DAILY_BUDGET = 3000000;
+export const DAILY_BUDGET_CAP = 2500000;
+export const DEFAULT_DAILY_BUDGET = DAILY_BUDGET_CAP;
+export const EVENT_DATES = ["2026-11-06", "2026-11-07"];
 export const DISTRICTS = ["동구", "중구", "서구", "유성구", "대덕구", "그 외"];
+
+export function effectiveDailyBudget(configured) {
+  const n = Number(configured);
+  if (!Number.isFinite(n) || n <= 0) return DAILY_BUDGET_CAP;
+  return Math.min(Math.floor(n), DAILY_BUDGET_CAP);
+}
+
+export function isEventDate(date) {
+  return EVENT_DATES.includes(String(date || ""));
+}
+
+export function defaultEventDate(today) {
+  const t = String(today || "");
+  if (isEventDate(t)) return t;
+  if (t && t < EVENT_DATES[0]) return EVENT_DATES[0];
+  return EVENT_DATES[EVENT_DATES.length - 1];
+}
 
 export function won(n) {
   return Number(n || 0).toLocaleString("ko-KR");
@@ -130,7 +149,7 @@ export function decidePayout(input) {
   const amount = typeof input.amount === "number" ? input.amount : parseWon(input.amount);
   const paid = Math.max(0, Number(input.paid) || 0);
   const issued = Math.max(0, Number(input.budgetIssued) || 0);
-  const limit = Number(input.dailyBudget) > 0 ? Number(input.dailyBudget) : DEFAULT_DAILY_BUDGET;
+  const limit = effectiveDailyBudget(input.dailyBudget);
 
   if (!Number.isInteger(amount)) return fail("amount-invalid", "구매금액은 숫자로 입력해 주세요.");
   if (amount > MAX_PURCHASE) return fail("amount-high", `구매금액이 너무 큽니다. ${won(MAX_PURCHASE)}원 이하로 입력해 주세요.`);
@@ -159,6 +178,7 @@ export function validateEntry(fields) {
   const errors = [];
   const date = String(fields.date || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push({ code: "date", message: "신청일자를 확인해 주세요." });
+  else if (!isEventDate(date)) errors.push({ code: "date", message: "행사 기간은 2026년 11월 6일과 7일입니다." });
   const nameNorm = cleanName(fields.name);
   if (nameNorm.length < 2 || nameNorm.length > 30) errors.push({ code: "name", message: "이름은 2글자 이상 입력해 주세요." });
   const birth = fields.birth;
@@ -196,7 +216,7 @@ export function summarizeVouchers(coupons) {
 }
 
 export function budgetStatusText(issued, dailyBudget) {
-  const limit = Number(dailyBudget) > 0 ? Number(dailyBudget) : DEFAULT_DAILY_BUDGET;
+  const limit = effectiveDailyBudget(dailyBudget);
   const used = Math.max(0, Number(issued) || 0);
   const remaining = limit - used;
   const slots = Math.floor(Math.max(0, remaining) / PAYOUT_AMOUNT);

@@ -47,10 +47,14 @@ service cloud.firestore {
         cfg().exists && cfg().data.approved is list && email() in cfg().data.approved
       );
     }
+    function isEventDate(date) {
+      return date == "2026-11-06" || date == "2026-11-07";
+    }
     function dailyLimit() {
-      return cfg().exists && cfg().data.dailyBudget is int && cfg().data.dailyBudget > 0
+      let configured = cfg().exists && cfg().data.dailyBudget is int && cfg().data.dailyBudget > 0
         ? cfg().data.dailyBudget
-        : 3000000;
+        : 2500000;
+      return configured < 2500000 ? configured : 2500000;
     }
     function appYear(date) {
       return date[0:4];
@@ -128,6 +132,7 @@ service cloud.firestore {
         && id == "rec_" + d.nameNorm + "_" + d.birth + "_" + year
         && !legacyBlocks(d.nameNorm, d.birth, year)
         && !ledgerBlocks(d.ledgerId, 10000)
+        && isEventDate(d.date)
         && budgetRoom(d.date, 10000)
         && phoneReady(d.phone, year, d.nameNorm, d.birth);
     }
@@ -140,6 +145,7 @@ service cloud.firestore {
         && d.exception == true
         && d.ledgerId == "ledger_" + d.dupKey + "_" + year
         && id == "ex_" + d.dupKey + "_" + year + "_" + d.phone
+        && isEventDate(d.date)
         && budgetRoom(d.date, 10000)
         && phoneReady(d.phone, year, d.nameNorm, d.birth);
     }
@@ -217,7 +223,7 @@ service cloud.firestore {
         && d.issued is int
         && d.issued >= 0;
       if (!shape) return false;
-      if (creating) return d.issued == 10000 && d.issued <= dailyLimit();
+      if (creating) return isEventDate(d.date) && d.issued == 10000 && d.issued <= dailyLimit();
       let prev = resource.data.issued is int ? resource.data.issued : 0;
       return (d.issued < prev)
         || (d.issued == prev + 10000 && d.issued <= dailyLimit());

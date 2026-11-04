@@ -5,7 +5,8 @@ import {
   MIN_PURCHASE, PAYOUT_AMOUNT, PAYOUT_CAP, MAX_PURCHASE,
   cleanName, couponFor, makeDupKey, decidePayout, summarizeVouchers,
   validateEntry, isPayoutRecord, budgetStatusText, personDocId, phoneLockId,
-  phoneConflict, isValidPhone, isValidBirth, parseWon
+  phoneConflict, isValidPhone, isValidBirth, parseWon, effectiveDailyBudget,
+  isEventDate, defaultEventDate, DAILY_BUDGET_CAP
 } from "./policy.js";
 
 const base = {
@@ -14,7 +15,7 @@ const base = {
   phoneUsed: false,
   recordExists: false,
   budgetIssued: 0,
-  dailyBudget: 3000000
+  dailyBudget: 2500000
 };
 
 test("3만원 이상은 구매액과 관계없이 1만원이다", () => {
@@ -45,16 +46,19 @@ test("휴대폰·예산·금액 검증", () => {
   assert.equal(decidePayout({ ...base, amount: 10000 }).code, "amount-low");
   assert.equal(decidePayout({ ...base, amount: MAX_PURCHASE + 1 }).code, "amount-high");
   assert.equal(decidePayout({ ...base, amount: null }).code, "amount-invalid");
-  assert.equal(decidePayout({ ...base, budgetIssued: 2990000 }).ok, true);
-  assert.equal(decidePayout({ ...base, budgetIssued: 2990001 }).code, "budget");
-  assert.equal(decidePayout({ ...base, budgetIssued: 3000000 }).code, "budget");
+  assert.equal(decidePayout({ ...base, budgetIssued: 2490000 }).ok, true);
+  assert.equal(decidePayout({ ...base, budgetIssued: 2490001 }).code, "budget");
+  assert.equal(decidePayout({ ...base, budgetIssued: 2500000 }).code, "budget");
+  assert.equal(decidePayout({ ...base, budgetIssued: 2490000, dailyBudget: 3000000 }).ok, true);
+  assert.equal(effectiveDailyBudget(3000000), DAILY_BUDGET_CAP);
+  assert.equal(effectiveDailyBudget(1000000), 1000000);
 });
 
 test("예외 지급도 예산과 휴대폰은 넘지 못한다", () => {
   const over = decidePayout({ ...base, paid: 10000, allowCapBypass: true });
   assert.equal(over.ok, true);
   assert.equal(decidePayout({ ...base, paid: 10000, allowCapBypass: true, phoneUsed: true }).code, "phone");
-  assert.equal(decidePayout({ ...base, paid: 10000, allowCapBypass: true, budgetIssued: 3000000 }).code, "budget");
+  assert.equal(decidePayout({ ...base, paid: 10000, allowCapBypass: true, budgetIssued: 2500000 }).code, "budget");
   assert.equal(decidePayout({ ...base, amount: 20000, allowCapBypass: true }).code, "amount-low");
 });
 
@@ -76,18 +80,19 @@ test("기존 5천원과 신규 1만원을 같이 집계한다", () => {
 });
 
 test("하루 예산 문구는 1만원 건수만 보여 준다", () => {
-  const ok = budgetStatusText(10000, 3000000);
-  assert.equal(ok.slots, 299);
+  const ok = budgetStatusText(10000, 2500000);
+  assert.equal(ok.limit, 2500000);
+  assert.equal(ok.slots, 249);
   assert.match(ok.line, /1만원 환급/);
   assert.doesNotMatch(ok.line, /5천원권/);
-  const tight = budgetStatusText(2995000, 3000000);
+  const tight = budgetStatusText(2495000, 2500000);
   assert.equal(tight.blocked, true);
   assert.match(tight.line, /접수할 수 없습니다/);
 });
 
 test("입력 검증", () => {
   const good = validateEntry({
-    date: "2026-11-04", name: "홍 길동", birth: "1979-10-10",
+    date: "2026-11-06", name: "홍 길동", birth: "1979-10-10",
     phone: "010-1234-5678", district: "동구", amount: "35,000", consent: true,
     now: new Date("2026-11-04T00:00:00")
   });
@@ -96,13 +101,13 @@ test("입력 검증", () => {
   assert.equal(good.phone, "01012345678");
   assert.equal(good.amount, 35000);
   const young = validateEntry({
-    date: "2026-11-04", name: "홍길동", birth: "2027-01-01",
+    date: "2026-11-06", name: "홍길동", birth: "2027-01-01",
     phone: "01012345678", district: "동구", amount: 30000, consent: true,
     now: new Date("2026-11-04T00:00:00")
   });
   assert.equal(young.ok, false);
   const badPhone = validateEntry({
-    date: "2026-11-04", name: "홍길동", birth: "1979-10-10",
+    date: "2026-11-07", name: "홍길동", birth: "1979-10-10",
     phone: "123", district: "동구", amount: 35000, consent: true,
     now: new Date("2026-11-04")
   });
@@ -112,6 +117,19 @@ test("입력 검증", () => {
   assert.equal(isValidPhone("0111234567"), true);
   assert.equal(isValidBirth("1899-01-01", new Date("2026-01-01")), false);
   assert.equal(parseWon("00"), 0);
+  assert.equal(isEventDate("2026-11-06"), true);
+  assert.equal(isEventDate("2026-11-07"), true);
+  assert.equal(isEventDate("2026-11-05"), false);
+  assert.equal(defaultEventDate("2026-11-04"), "2026-11-06");
+  assert.equal(defaultEventDate("2026-11-07"), "2026-11-07");
+  assert.equal(defaultEventDate("2026-11-08"), "2026-11-07");
+  const outside = validateEntry({
+    date: "2026-11-05", name: "홍길동", birth: "1979-10-10",
+    phone: "01012345678", district: "동구", amount: 35000, consent: true,
+    now: new Date("2026-11-04")
+  });
+  assert.equal(outside.ok, false);
+  assert.equal(outside.errors[0].code, "date");
   assert.equal(cleanName("홍길동(김)"), "홍길동김");
 });
 
@@ -147,6 +165,10 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   assert.match(html, /1인 연 1회\(1만원\)/);
   assert.match(html, /상품권 \(5천원권\)/);
   assert.match(html, /from "\.\/policy\.js"/);
+  assert.match(html, /2026-11-06/);
+  assert.match(html, /2026-11-07/);
+  assert.match(html, /2,500,000/);
+  assert.doesNotMatch(html, /3,000,000/);
   assert.doesNotMatch(html, /5만원 이상/);
   assert.doesNotMatch(html, /3만원↑ 5천원/);
   assert.doesNotMatch(html, /amt>=50000/);
@@ -158,4 +180,8 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   assert.match(rules, /d\.coupon == 10000/);
   assert.match(rules, /legacyBlocks/);
   assert.match(rules, /dailyLimit/);
+  assert.match(rules, /2500000/);
+  assert.match(rules, /2026-11-06/);
+  assert.match(rules, /2026-11-07/);
+  assert.doesNotMatch(rules, /3000000/);
 });
