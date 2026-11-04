@@ -1,0 +1,285 @@
+rules_version = '2';
+// 문창전통시장 페이백 — Firestore 보안 규칙 제안.
+// 이 저장소에는 규칙 파일이 없었다. 콘솔에 배포하기 전에는 적용되지 않는다.
+//   firebase deploy --only firestore:rules
+// 배포 프로젝트는 index.html FIREBASE_CONFIG.projectId 와 같아야 한다.
+// MASTER 이메일은 index.html 의 MASTER_EMAILS 와 같게 유지한다.
+//
+// 규칙이 막는 것
+// - 구매금액 3만원 미만·1천만원 초과, 지급액이 10,000원이 아닌 신규 접수
+// - 같은 이름+생년월일+연도의 두 번째 접수(rec_ 문서, legacy_ 잠금)
+// - 지급 전에 휴대폰 잠금 문서가 없는 접수
+// - 하루 예산 문서를 한도 위로 올리는 갱신(한 번에 1만원씩만 증가)
+// - 승인되지 않은 계정, 대표가 아닌 계정의 예외 지급·예산/점포 수정
+//
+// 규칙만으로 완전히 막지 못하는 것
+// - 예산 문서를 갱신하지 않고 접수 문서만 만드는 조작(카운터와 원장이 어긋남)
+// - 직원 계정으로 잠금 문서를 지운 뒤 다시 넣는 행위
+// 이름+생년월일 해시(dupKey)는 규칙에서 재계산할 수 없어, 사람 잠금은
+// 문서 ID(rec_/legacy_)로 건다. 예전 5천원 기록은 대표의 "잠금 갱신"으로
+// legacy_ 문서를 만들어야 규칙에서도 추가 지급이 막힌다.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function email() {
+      return request.auth.token.email.lower();
+    }
+    function cfgPath() {
+      return /databases/$(database)/documents/applications/_config_admins;
+    }
+    function cfg() {
+      return get(cfgPath());
+    }
+    function isBootstrap() {
+      return email() == "kimsketch@naver.com";
+    }
+    function isMaster() {
+      return signedIn() && (
+        isBootstrap() ||
+        (cfg().exists && cfg().data.masters is list && email() in cfg().data.masters)
+      );
+    }
+    function isApproved() {
+      return isMaster() || (
+        cfg().exists && cfg().data.approved is list && email() in cfg().data.approved
+      );
+    }
+    function dailyLimit() {
+      return cfg().exists && cfg().data.dailyBudget is int && cfg().data.dailyBudget > 0
+        ? cfg().data.dailyBudget
+        : 3000000;
+    }
+    function appYear(date) {
+      return date[0:4];
+    }
+
+    function legacyPath(nameNorm, birth, year) {
+      return /databases/$(database)/documents/applications/$("legacy_" + nameNorm + "_" + birth + "_" + year);
+    }
+    function legacyBlocks(nameNorm, birth, year) {
+      let path = legacyPath(nameNorm, birth, year);
+      return exists(path) && get(path).data.paid is int && get(path).data.paid > 0;
+    }
+    function ledgerBlocks(ledgerId, add) {
+      return !(ledgerId is string)
+        || !ledgerId.matches("^ledger_[0-9a-f]{64}_[0-9]{4}$")
+        || (
+          exists(/databases/$(database)/documents/applications/$(ledgerId))
+          && !(get(/databases/$(database)/documents/applications/$(ledgerId)).data.paid is int)
+        )
+        || (
+          exists(/databases/$(database)/documents/applications/$(ledgerId))
+          && get(/databases/$(database)/documents/applications/$(ledgerId)).data.paid + add > 10000
+        );
+    }
+    function budgetRoom(date, add) {
+      let path = /databases/$(database)/documents/applications/$("budget_" + date);
+      let issued = exists(path) && get(path).data.issued is int ? get(path).data.issued : 0;
+      return issued + add <= dailyLimit();
+    }
+    function phonePath(phone, year) {
+      return /databases/$(database)/documents/applications/$("phone_" + phone + "_" + year);
+    }
+    function phoneReady(phone, year, nameNorm, birth) {
+      let path = phonePath(phone, year);
+      return exists(path)
+        && get(path).data.phoneLock == true
+        && get(path).data.phone == phone
+        && get(path).data.year == year
+        && get(path).data.nameNorm == nameNorm
+        && get(path).data.birth == birth;
+    }
+    function validMoney(d) {
+      return d.amount is int
+        && d.amount >= 30000
+        && d.amount <= 10000000
+        && d.coupon is int
+        && d.coupon == 10000;
+    }
+    function validIdentity(d) {
+      return d.name is string
+        && d.name.size() >= 2
+        && d.name.size() <= 40
+        && d.nameNorm is string
+        && d.nameNorm.matches("^[0-9A-Za-z가-힣]{2,30}$")
+        && d.birth is string
+        && d.birth.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && d.date is string
+        && d.date.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && d.phone is string
+        && d.phone.matches("^01[0-9]{8,9}$")
+        && d.district in ["동구", "중구", "서구", "유성구", "대덕구", "그 외"]
+        && d.dupKey is string
+        && d.dupKey.matches("^[0-9a-f]{64}$")
+        && d.operatorUid == request.auth.uid
+        && d.operatorEmail == email();
+    }
+
+    function validPayoutCreate(id) {
+      let d = request.resource.data;
+      let year = appYear(d.date);
+      return validIdentity(d)
+        && validMoney(d)
+        && d.exception != true
+        && d.ledgerId == "ledger_" + d.dupKey + "_" + year
+        && id == "rec_" + d.nameNorm + "_" + d.birth + "_" + year
+        && !legacyBlocks(d.nameNorm, d.birth, year)
+        && !ledgerBlocks(d.ledgerId, 10000)
+        && budgetRoom(d.date, 10000)
+        && phoneReady(d.phone, year, d.nameNorm, d.birth);
+    }
+    function validExceptionCreate(id) {
+      let d = request.resource.data;
+      let year = appYear(d.date);
+      return isMaster()
+        && validIdentity(d)
+        && validMoney(d)
+        && d.exception == true
+        && d.ledgerId == "ledger_" + d.dupKey + "_" + year
+        && id == "ex_" + d.dupKey + "_" + year + "_" + d.phone
+        && budgetRoom(d.date, 10000)
+        && phoneReady(d.phone, year, d.nameNorm, d.birth);
+    }
+    function validPayoutUpdate() {
+      let d = request.resource.data;
+      let prev = resource.data;
+      return isApproved()
+        && prev.name is string
+        && prev.coupon is int
+        && d.coupon is int
+        && (d.coupon == prev.coupon || d.coupon == 0 || (prev.coupon == 0 && d.coupon == 10000))
+        && (d.coupon != 5000 || prev.coupon == 5000)
+        && d.coupon in [0, 5000, 10000]
+        && d.amount == prev.amount
+        && d.birth == prev.birth
+        && d.phone == prev.phone
+        && d.date == prev.date
+        && d.operatorUid == prev.operatorUid
+        && d.get("exception", false) == prev.get("exception", false)
+        && (isMaster() || prev.operatorUid == request.auth.uid);
+    }
+
+    function validPhoneLock(id) {
+      let d = request.resource.data;
+      return d.phoneLock == true
+        && d.phone is string
+        && d.phone.matches("^01[0-9]{8,9}$")
+        && d.year is string
+        && d.year.matches("^[0-9]{4}$")
+        && d.nameNorm is string
+        && d.nameNorm.matches("^[0-9A-Za-z가-힣]{2,30}$")
+        && d.birth is string
+        && d.birth.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && id == "phone_" + d.phone + "_" + d.year
+        && d.pending is bool;
+    }
+    function validLegacyLock(id) {
+      let d = request.resource.data;
+      return d.legacyLock == true
+        && d.nameNorm is string
+        && d.nameNorm.matches("^[0-9A-Za-z가-힣]{2,30}$")
+        && d.birth is string
+        && d.birth.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && d.year is string
+        && d.year.matches("^[0-9]{4}$")
+        && id == "legacy_" + d.nameNorm + "_" + d.birth + "_" + d.year
+        && d.paid is int
+        && d.paid >= 0
+        && d.paid <= 100000;
+    }
+    function validLedger(id, creating) {
+      let d = request.resource.data;
+      let shape = d.ledger == true
+        && d.dupKey is string
+        && d.dupKey.matches("^[0-9a-f]{64}$")
+        && d.year is string
+        && d.year.matches("^[0-9]{4}$")
+        && id == "ledger_" + d.dupKey + "_" + d.year
+        && d.paid is int
+        && d.paid >= 0
+        && d.paid <= 100000;
+      if (!shape) return false;
+      if (creating) return d.paid == 10000 || d.paid == 5000 || (isMaster() && d.paid % 10000 == 0 && d.paid > 0);
+      let prev = resource.data.paid is int ? resource.data.paid : 0;
+      if (d.paid <= prev) return true;
+      if (d.paid == prev + 10000 && d.paid <= 10000) return true;
+      return isMaster() && d.paid == prev + 10000;
+    }
+    function validBudget(id, creating) {
+      let d = request.resource.data;
+      let shape = d.budget == true
+        && d.date is string
+        && d.date.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && id == "budget_" + d.date
+        && d.issued is int
+        && d.issued >= 0;
+      if (!shape) return false;
+      if (creating) return d.issued == 10000 && d.issued <= dailyLimit();
+      let prev = resource.data.issued is int ? resource.data.issued : 0;
+      return (d.issued < prev)
+        || (d.issued == prev + 10000 && d.issued <= dailyLimit());
+    }
+
+    function selfPendingCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly(["config", "pending"])
+        && request.resource.data.config == true
+        && request.resource.data.pending is list
+        && request.resource.data.pending.size() == 1
+        && request.resource.data.pending[0] == email();
+    }
+    function selfPendingUpdate() {
+      return signedIn()
+        && resource.data.config == true
+        && request.resource.data.config == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["pending"])
+        && request.resource.data.pending is list
+        && email() in request.resource.data.pending
+        && request.resource.data.pending.size() == resource.data.get("pending", []).size() + 1
+        && request.resource.data.pending.hasAll(resource.data.get("pending", []));
+    }
+
+    match /applications/{id} {
+      allow read: if signedIn() && (isApproved() || id == "_config_admins");
+
+      allow create: if (isApproved() && (
+          validPayoutCreate(id)
+          || validExceptionCreate(id)
+          || validPhoneLock(id)
+          || validLegacyLock(id)
+          || validLedger(id, true)
+          || validBudget(id, true)
+          || (isMaster() && id == "_stores" && request.resource.data.config == true)
+        ))
+        || (id == "_config_admins" && (selfPendingCreate() || (isMaster() && request.resource.data.config == true)));
+
+      allow update: if (isApproved() && (
+          validPayoutUpdate()
+          || validPhoneLock(id)
+          || validLegacyLock(id)
+          || validLedger(id, false)
+          || validBudget(id, false)
+          || (isMaster() && id == "_stores" && request.resource.data.config == true)
+        ))
+        || (id == "_config_admins" && (selfPendingUpdate() || (isMaster() && request.resource.data.config == true)));
+
+      allow delete: if isApproved()
+        && id != "_config_admins"
+        && id != "_stores"
+        && resource.data.budget != true
+        && resource.data.ledger != true
+        && (
+          resource.data.phoneLock == true
+          || resource.data.legacyLock == true
+          || (
+            resource.data.name is string
+            && resource.data.coupon is int
+            && (isMaster() || resource.data.operatorUid == request.auth.uid)
+          )
+        );
+    }
+  }
+}
