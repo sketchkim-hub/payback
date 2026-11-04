@@ -266,8 +266,7 @@
         <div class="form-grid">
           <div id="budgetBar" class="wide budget-bar"></div>
           <div class="tier-row wide">
-            <div class="tier t5"><b>3만원 이상 구매</b><span class="amt">5,000원</span></div>
-            <div class="tier t10"><b>5만원 이상 구매</b><span class="amt">10,000원</span></div>
+            <div class="tier t10"><b>3만원 이상 구매 · 1인 연 1회</b><span class="amt">10,000원 환급</span></div>
           </div>
 
           <div class="field wide">
@@ -279,7 +278,8 @@
 
           <div class="field">
             <label for="fDate">신청일자</label>
-            <input id="fDate" type="date" />
+            <input id="fDate" type="date" min="2026-11-06" max="2026-11-07" />
+            <div class="hint">행사 기간은 2026년 11월 6일과 7일입니다.</div>
           </div>
 
           <div class="field">
@@ -325,7 +325,7 @@
           <div class="field wide">
             <label for="fAmount">구매금액 (원)</label>
             <input id="fAmount" type="text" inputmode="numeric" placeholder="예: 35,000" autocomplete="off" />
-            <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
+            <div class="hint" id="couponPreview">금액을 입력하면 지급될 환급액이 표시됩니다.</div>
           </div>
 
           <div class="wide"><div id="historyBox" class="histbox"></div></div>
@@ -343,7 +343,8 @@
               <summary>수집 항목 및 안내 보기</summary>
               <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
                  • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
-                 • 지급 기준: 3만원↑ 5천원 / 5만원↑ 1만원, 1인 연간 누적 1만원 한도 (한도 도달 시 참여 종료)<br>
+                 • 행사 기간: 2026년 11월 6일, 11월 7일. 이 이틀에만 접수됩니다.<br>
+                 • 지급 기준: 3만원 이상 구매 시 10,000원 환급, 1인 연 1회(1만원). 같은 해에 이미 받았거나 같은 휴대폰으로 받은 기록이 있으면 다시 지급하지 않습니다. 하루 예산은 2,500,000원입니다.<br>
                  • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
                  • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
                  • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
@@ -373,7 +374,7 @@
         </div>
         <div class="stat-grid">
           <div class="stat"><div class="k" id="statScopeLabel">신청 인원</div><div class="v" id="sCount">0</div><div class="sub">명</div></div>
-          <div class="stat"><div class="k">5,000원 상품권</div><div class="v" id="sVouchers">0<span style="font-size:14px">매</span></div><div class="sub" id="sVoucherNote">-</div></div>
+          <div class="stat"><div class="k">상품권 (5천원권)</div><div class="v" id="sVouchers">0<span style="font-size:14px">매</span></div><div class="sub" id="sVoucherNote">1만원 지급 1건 = 2매</div></div>
           <div class="stat total"><div class="k" id="sTotalLabel">총 지급 금액</div><div class="v" id="sTotal">0원</div></div>
           <div class="stat"><div class="k">남은 예산</div><div class="v" id="sRemain">0원</div><div class="sub" id="sRemainNote">하루 예산 기준</div></div>
         </div>
@@ -474,13 +475,20 @@
 
         <div class="modal-sec" id="budgetSec" style="display:none">
           <h4>일일 예산 한도</h4>
-          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">하루 상품권 지급 예산입니다. 접수 화면 예산바와 집계의 "남은 예산" 기준이 됩니다. (초과해도 접수는 차단되지 않고 표시만 됩니다)</p>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">하루 상품권 지급 예산은 2,500,000원입니다. 신청일자의 지급액이 이 한도를 넘으면 접수가 되지 않습니다. 더 낮게만 줄일 수 있습니다.</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <input id="budgetInput" type="text" inputmode="numeric" placeholder="예: 3,000,000" style="flex:1;min-width:140px;margin-bottom:0" autocomplete="off" />
+            <input id="budgetInput" type="text" inputmode="numeric" placeholder="예: 2,500,000" style="flex:1;min-width:140px;margin-bottom:0" autocomplete="off" />
             <span style="font-size:13px;color:var(--ink-soft)">원</span>
             <button id="budgetSaveBtn" class="btn-sm btn-blue" style="color:#fff">저장</button>
           </div>
           <div id="budgetMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec" id="lockSec" style="display:none">
+          <h4>기존 지급 잠금</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">이미 지급된 이름·생년월일·휴대폰을 잠급니다. 예전 5,000원 기록도 올해 1회 한도에 포함됩니다. 보안 규칙을 배포한 뒤 한 번 실행하세요.</p>
+          <button id="backfillBtn" class="btn-sm btn-blue" style="color:#fff">잠금 갱신</button>
+          <div id="backfillMsg" class="err"></div>
         </div>
 
         <div class="modal-sec" id="storeSec" style="display:none">
@@ -551,12 +559,11 @@
         <div class="modal-sec">
           <h4>수정할 지급액</h4>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-            <button class="btn-sm ed-quick" data-v="5000" style="background:var(--hanji-2)">5,000원</button>
             <button class="btn-sm ed-quick" data-v="10000" style="background:var(--hanji-2)">10,000원</button>
             <button class="btn-sm ed-quick" data-v="0" style="background:var(--hanji-2)">0원 (미지급)</button>
           </div>
           <input id="edValue" type="text" inputmode="numeric" placeholder="직접 입력 (원)" autocomplete="off" />
-          <div class="hint" id="edHint">지급액을 고치면 누적 한도와 예산 집계도 자동으로 조정됩니다.</div>
+          <div class="hint" id="edHint">지급액은 10,000원 또는 0원입니다. 예전 5,000원 기록은 그대로 둘 수 있지만 1만원으로 올릴 수는 없습니다.</div>
           <button id="edSaveBtn" class="btn btn-blue" style="margin-top:12px">수정 저장</button>
           <div id="edMsg" class="err"></div>
         </div>
@@ -570,8 +577,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
   sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, getDocs, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment }
+import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, getDocs, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { PAYOUT_AMOUNT, PAYOUT_CAP, DEFAULT_DAILY_BUDGET, DAILY_BUDGET_CAP, MAX_PURCHASE, MIN_PURCHASE,
+  won, cleanName, digitsOnly, yearOf, makeDupKey, isValidPhone,
+  personDocId, legacyLockId, phoneLockId, ledgerDocId, exceptionDocId,
+  isPayoutRecord, samePerson, decidePayout, validateEntry, summarizeVouchers,
+  budgetStatusText, blockTitle, phoneConflict, effectiveDailyBudget,
+  EVENT_DATES, defaultEventDate }
+  from "./policy.js";
 
 /* ===================================================================
    CONFIG ─ Firebase 콘솔의 firebaseConfig 값을 여기에 붙여넣으세요.
@@ -586,14 +600,12 @@ const FIREBASE_CONFIG = {
 };
 const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
 const MARKET_NAME = "문창백년전통시장";            // 화면 표기용(자유 변경)
-const PAYOUT_CAP = 10000;                         // 1인당 전체 행사 기간 누적 지급 한도(원)
-const DAILY_BUDGET = 3000000;                     // 하루 상품권 지급 예산(원) — 초과해도 차단하지 않고 여유분 표시용
-const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). 여러 명이면 쉼표로 추가
+const DAILY_BUDGET = DEFAULT_DAILY_BUDGET;        // 하루 지급 예산 상한 2,500,000원. 대표는 더 낮게만 줄일 수 있다.
+const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). firestore.rules 의 부트스트랩 메일과 같아야 한다.
 /* =================================================================== */
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const won = n => Number(n||0).toLocaleString("ko-KR");
 /* 입력시각(서버 기록) 표시용 — 시:분:초 */
 const p2 = n => String(n).padStart(2,"0");
 const tsDate = ts => (ts && typeof ts.seconds==="number") ? new Date(ts.seconds*1000) : null;
@@ -601,7 +613,7 @@ const fmtTime = ts => { const d=tsDate(ts); return d ? `${p2(d.getHours())}:${p2
 const fmtDateTime = ts => { const d=tsDate(ts); return d ? `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : ""; };
 const show = id => { document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $(id).classList.add("active"); };
 
-document.getElementById("marketName").textContent = MARKET_NAME + " · 상품권 지급 접수";
+document.getElementById("marketName").textContent = MARKET_NAME + " · 2026.11.6–7 지급 접수";
 
 // 설정 미완료 감지
 if (FIREBASE_CONFIG.apiKey.startsWith("여기에")) {
@@ -617,7 +629,7 @@ function startApp(){
   const col = collection(db, "applications");
 
   let records = [];     // 실시간 캐시
-  let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0;
+  let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0, budgetWatchDate = "";
   let dailyBudget = DAILY_BUDGET;              // 일일 예산 한도(설정에서 변경 가능, Firebase 공유)
   let storeList = [], storeUnsub = null;
   const STORE_ID = "_stores";                  // 상인회 점포 명단 저장 문서(applications 내)
@@ -645,7 +657,7 @@ function startApp(){
           dynamicMasters = (Array.isArray(d.masters)? d.masters:[]).map(e=>String(e||"").toLowerCase());
           approvedOps   = (Array.isArray(d.approved)? d.approved:[]).map(e=>String(e||"").toLowerCase());
           pendingOps    = (Array.isArray(d.pending)? d.pending:[]).map(e=>String(e||"").toLowerCase());
-          dailyBudget   = (typeof d.dailyBudget==="number" && d.dailyBudget>0) ? d.dailyBudget : DAILY_BUDGET;
+          dailyBudget   = effectiveDailyBudget(d.dailyBudget);
           applyAccess();
           renderBudgetBar(); renderStats();
           if (acctModal.classList.contains("show")){ renderMasterList(); renderPendingList(); renderBudgetSetting(); }
@@ -662,6 +674,7 @@ function startApp(){
       if (cfgUnsub) { cfgUnsub(); cfgUnsub=null; }
       if (storeUnsub) { storeUnsub(); storeUnsub=null; }
       if (budgetUnsub) { budgetUnsub(); budgetUnsub=null; }
+      budgetWatchDate = "";
       clearTimeout(idleTimer);
       show("loginScreen");
     }
@@ -691,26 +704,26 @@ function startApp(){
   }
 
   /* ---------- 오늘 예산 실시간 구독 ---------- */
-  function subscribeBudget(){
-    if (budgetUnsub) return;                     // 이미 구독 중
-    const bref = doc(db,"applications","budget_"+todayStr());
+  function subscribeBudget(date){
+    const d = date || ($("fDate") && $("fDate").value) || defaultEventDate(todayStr());
+    if (budgetUnsub && budgetWatchDate === d) return;
+    if (budgetUnsub) { budgetUnsub(); budgetUnsub = null; }
+    budgetWatchDate = d;
+    const bref = doc(db,"applications","budget_"+d);
     budgetUnsub = onSnapshot(bref,
       snap => { todayBudget = (snap.exists() && snap.data().issued) ? snap.data().issued : 0; renderBudgetBar(); },
       ()   => { todayBudget = 0; renderBudgetBar(); });
   }
   function renderBudgetBar(){
     const el = $("budgetBar"); if(!el) return;
-    const used = todayBudget, rem = dailyBudget - used;
-    const pct = Math.min(100, Math.round(used/dailyBudget*100));
-    const over = rem < 0;
-    const barColor = over ? "var(--dancheong-red)" : pct>=80 ? "#d9822b" : "var(--dancheong-blue)";
-    const remLine = over
-      ? `<b style="color:var(--dancheong-red)">예산 초과(여유분 사용) ${won(-rem)}원 초과</b> · 지급 계속 가능`
-      : `여유 예산 <b style="color:var(--dancheong-blue)">${won(rem)}원</b> — 1만원권 <b>${Math.floor(rem/10000)}장</b> 또는 5천원권 <b>${Math.floor(rem/5000)}장</b> 가능`;
+    const st = budgetStatusText(todayBudget, dailyBudget);
+    const pct = st.limit ? Math.min(100, Math.round(st.used/st.limit*100)) : 0;
+    const barColor = st.blocked ? "var(--dancheong-red)" : pct>=80 ? "#d9822b" : "var(--dancheong-blue)";
+    const labelDate = budgetWatchDate || defaultEventDate(todayStr());
     el.innerHTML = `
-      <div class="bhead"><span><b>오늘 상품권 지급</b> (${todayStr()})</span><span><b>${won(used)}</b> / ${won(dailyBudget)}원</span></div>
+      <div class="bhead"><span><b>${labelDate} 상품권 지급</b></span><span><b>${won(st.used)}</b> / ${won(st.limit)}원</span></div>
       <div class="btrack"><div class="bfill" style="width:${pct}%;background:${barColor}"></div></div>
-      <div class="bsub">${remLine}</div>`;
+      <div class="bsub">${st.line}</div>`;
   }
 
   $("loginBtn").onclick = async () => {
@@ -775,6 +788,7 @@ function startApp(){
     $("pendingSec").style.display = isMaster ? "block" : "none";
     $("storeSec").style.display = isMaster ? "block" : "none";
     $("budgetSec").style.display = isMaster ? "block" : "none";
+    $("lockSec").style.display = isMaster ? "block" : "none";
     if (isMaster){ renderMasterList(); renderPendingList(); renderStoreList(); renderBudgetSetting(); }
     acctModal.classList.add("show");
   }
@@ -853,10 +867,64 @@ function startApp(){
     const v = Number(($("budgetInput").value||"").replace(/\D/g,""));
     const msg=$("budgetMsg"); msg.style.color="";
     if(!Number.isFinite(v) || v<=0){ msg.textContent="0보다 큰 금액을 입력하세요."; return; }
+    if(v > DAILY_BUDGET_CAP){ msg.textContent=`하루 예산은 ${won(DAILY_BUDGET_CAP)}원까지입니다.`; return; }
     try {
       await setDoc(doc(db,"applications",CFG_ID), { config:true, dailyBudget:v, updatedAt: serverTimestamp() }, { merge:true });
       msg.style.color="var(--dancheong-blue)"; msg.textContent=`일일 예산을 ${won(v)}원으로 저장했습니다.`;
     } catch(e){ msg.textContent="저장 실패: "+(e.code||e.message); }
+  };
+
+  $("backfillBtn").onclick = async ()=>{
+    if (!isMaster) return;
+    const btn = $("backfillBtn");
+    const msg = $("backfillMsg");
+    btn.disabled = true; msg.style.color=""; msg.textContent="기존 기록을 확인하는 중…";
+    try {
+      const snap = await getDocs(col);
+      const all = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      const payouts = all.filter(isPayoutRecord);
+      const phoneOwner = new Map();
+      all.forEach(d=>{
+        if (d.phoneLock && d.phone && d.year) phoneOwner.set(d.phone+"_"+d.year, d.dupKey||"");
+      });
+      const groups = new Map();
+      payouts.forEach(r=>{
+        const year = yearOf(r.date);
+        const nameNorm = r.nameNorm || cleanName(r.name);
+        if (!nameNorm || !r.birth || !year) return;
+        const k = nameNorm+"|"+r.birth+"|"+year;
+        const g = groups.get(k) || { nameNorm, birth:r.birth, year, paid:0, dupKey:r.dupKey||"", phones:[] };
+        g.paid += Number(r.coupon)||0;
+        if (r.dupKey) g.dupKey = r.dupKey;
+        if (r.phone) g.phones.push(digitsOnly(r.phone));
+        groups.set(k, g);
+      });
+      const ops = [];
+      let conflicts = 0;
+      for (const g of groups.values()){
+        ops.push({ id: legacyLockId(g.nameNorm, g.birth, g.year), data: { legacyLock:true, nameNorm:g.nameNorm, birth:g.birth, year:g.year, paid:g.paid, dupKey:g.dupKey||null } });
+        for (const phone of new Set(g.phones.filter(isValidPhone))){
+          const key = phone+"_"+g.year;
+          const owner = phoneOwner.get(key);
+          if (owner && g.dupKey && owner!==g.dupKey){ conflicts++; continue; }
+          phoneOwner.set(key, g.dupKey||"locked");
+          ops.push({ id: phoneLockId(phone, g.year), data: { phoneLock:true, pending:false, phone, nameNorm:g.nameNorm, birth:g.birth, year:g.year, dupKey:g.dupKey||null, operatorUid: currentUid } });
+        }
+      }
+      let written = 0;
+      for (let i=0;i<ops.length;i+=400){
+        const batch = writeBatch(db);
+        ops.slice(i, i+400).forEach(op=> batch.set(doc(db,"applications", op.id), op.data, { merge:true }));
+        await batch.commit();
+        written += Math.min(400, ops.length-i);
+        msg.textContent = `저장 중… ${written}/${ops.length}`;
+      }
+      msg.style.color="var(--dancheong-blue)";
+      msg.textContent = `잠금 ${ops.length}건을 갱신했습니다.` + (conflicts ? ` 휴대폰이 서로 다른 사람과 겹친 ${conflicts}건은 건너뛰었습니다.` : "");
+    } catch(e){
+      msg.style.color="";
+      msg.textContent = "잠금 갱신 실패: " + (e.code||e.message||e);
+    } finally { btn.disabled = false; }
   };
 
   /* ---------- 상인회 점포 명단 (업종 포함) ---------- */
@@ -1023,7 +1091,7 @@ function startApp(){
       ? query(col, orderBy("createdAt","desc"))
       : query(col, where("operatorUid","==",currentUid));
     unsub = onSnapshot(q, snap => {
-      records = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(r => !r.ledger && !r.config && !r.budget);
+      records = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(isPayoutRecord);
       if (!isMaster) records.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
       refreshYearOptions();
       refreshOperatorOptions();
@@ -1079,7 +1147,9 @@ function startApp(){
 
   /* ---------- 기본값 ---------- */
   function todayDefaults(){
-    const t = new Date().toISOString().slice(0,10);
+    const t = defaultEventDate(todayStr());
+    $("fDate").min = EVENT_DATES[0];
+    $("fDate").max = EVENT_DATES[EVENT_DATES.length - 1];
     $("fDate").value = t; $("statDate").value = t; $("dataDate").value = "";
   }
 
@@ -1103,56 +1173,76 @@ function startApp(){
   }
   function clearBirth(){ bY.value=bM.value=bD.value=""; }
 
-  /* ---------- 쿠폰 판정 ---------- */
-  const couponFor = amt => amt>=50000 ? 10000 : amt>=30000 ? 5000 : 0;
-
   /* ---------- 지급액 미리보기 + 기존 수령 내역 ---------- */
-  // 이름에서 한글·영문·숫자 외 문자(백틱·공백·기호 등)는 무시하고 대조
-  const cleanName = s => String(s||"").replace(/[^가-힣A-Za-z0-9]/g,"");
-  const digitsOnly = s => String(s||"").replace(/\D/g,"");
-  const yearOf = d => String(d||"").slice(0,4);   // 신청일자 연도 (연도별 분리 기준)
-  // 이름(정규화)+생년월일 일치 + 같은 연도 기존 기록 (전화번호 무관 — 동일인 표시용)
+  // 이름에서 한글·영문·숫자 외 문자는 무시한다. 중복 키는 이름+생년월일만 쓴다.
   function matchByNameBirth(name, birth){
     const cn = cleanName(name), yr = yearOf($("fDate").value);
-    return records.filter(x => cleanName(x.name)===cn && x.birth===birth && yearOf(x.date)===yr);
+    return records.filter(x => (x.nameNorm || cleanName(x.name))===cn && x.birth===birth && yearOf(x.date)===yr);
   }
-  /* 공용 데이터로 누적 수령액을 조회 — 다른 담당자·지난 회차 입력분까지 정확히 반영.
-     ① 공용 원장(ledger) 문서(모든 담당자가 읽기 가능) ② 접수문서 합산 ③ 화면 캐시 순으로 권위값 산출 */
   async function authPaid(name, birth, year){
     const key = await makeDupKey(name, birth);
-    let paidLedger = null, recs = null;
+    const nameNorm = cleanName(name);
+    let paidLedger = null, legacyPaid = 0, recs = null, recordExists = false;
     try {
-      const ls = await getDoc(doc(db,"applications","ledger_"+key+"_"+year));
-      if (ls.exists()) paidLedger = ls.data().paid||0;
+      const ls = await getDoc(doc(db,"applications", ledgerDocId(key, year)));
+      if (ls.exists()) paidLedger = Number(ls.data().paid)||0;
+    } catch(_){}
+    try {
+      const leg = await getDoc(doc(db,"applications", legacyLockId(nameNorm, birth, year)));
+      if (leg.exists()) legacyPaid = Number(leg.data().paid)||0;
+      const recSnap = await getDoc(doc(db,"applications", personDocId(nameNorm, birth, year)));
+      recordExists = recSnap.exists();
     } catch(_){}
     try {
       const qs = await getDocs(query(collection(db,"applications"), where("dupKey","==",key)));
-      recs = qs.docs.map(d=>({id:d.id,...d.data()})).filter(r=>!r.ledger && !r.config && yearOf(r.date)===year);
-    } catch(_){ recs = null; }   // 엄격한 보안규칙에서 실패하면 원장/캐시로 대체
+      recs = qs.docs.map(d=>({id:d.id,...d.data()})).filter(r=>isPayoutRecord(r) && yearOf(r.date)===year);
+    } catch(_){ recs = null; }
     if (!recs) recs = matchByNameBirth(name, birth);
-    const paidRecs = recs.reduce((s,r)=>s+(r.coupon||0),0);
-    const paid = Math.max(paidLedger!=null?paidLedger:0, paidRecs);   // 권위값(더 큰 쪽)
-    return { key, paid, recs };
+    const paidRecs = recs.reduce((s,r)=>s+(Number(r.coupon)||0),0);
+    const paid = Math.max(paidLedger!=null?paidLedger:0, legacyPaid, paidRecs);
+    return { key, paid, recs, nameNorm, recordExists: recordExists || legacyPaid>0, legacyPaid };
+  }
+  async function phoneUsedByOther(phone, year, dupKey, nameNorm, birth){
+    if (!isValidPhone(phone)) return false;
+    const owned = data => samePerson(data, nameNorm, birth, dupKey);
+    try {
+      const lock = await getDoc(doc(db,"applications", phoneLockId(phone, year)));
+      if (lock.exists() && phoneConflict(lock.data(), dupKey)==="other") return true;
+    } catch(_){}
+    if (records.some(r => isPayoutRecord(r) && digitsOnly(r.phone)===phone && yearOf(r.date)===year && !owned(r) && (Number(r.coupon)||0)>0)) return true;
+    try {
+      const qs = await getDocs(query(collection(db,"applications"), where("phone","==",phone)));
+      return qs.docs.some(d => {
+        const data = {id:d.id, ...d.data()};
+        return isPayoutRecord(data) && yearOf(data.date)===year && !owned(data) && (Number(data.coupon)||0)>0;
+      });
+    } catch(_){ return false; }
+  }
+  async function budgetIssuedFor(date){
+    if (date===todayStr()) return todayBudget;
+    try {
+      const b = await getDoc(doc(db,"applications","budget_"+date));
+      return b.exists() ? (Number(b.data().issued)||0) : 0;
+    } catch(_){ return 0; }
+  }
+  function amountHint(amount){
+    const el = $("couponPreview");
+    if (!amount){ el.textContent = "금액을 입력하면 지급될 환급액이 표시됩니다."; return; }
+    if (amount>MAX_PURCHASE){ el.textContent = `구매금액은 ${won(MAX_PURCHASE)}원 이하로 입력해 주세요.`; return; }
+    if (amount<MIN_PURCHASE){ el.innerHTML = `3만원 이상 구매 시 10,000원이 환급됩니다. (입력: ${won(amount)}원)`; return; }
+    el.innerHTML = `지급액: <b style="color:var(--dancheong-red)">10,000원</b> · 1인 연 1회`;
   }
   let eligTimer=null, eligToken=0, lastAuth=null;
   function updatePreview(){
-    const el = $("couponPreview");
     const elig = $("eligCheck");
     const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
-    const tier = couponFor(amount);
     const name = $("fName").value.trim();
     const birth = getBirth();
     const cn = cleanName(name);
-    const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
     const nameBirthReady = cn.length>=2 && birth && birth!=="INVALID";
     const year = yearOf($("fDate").value);
-
-    // 구매금액 안내(항상 갱신)
-    if (!amount) el.innerHTML = "금액을 입력하면 지급될 상품권이 표시됩니다.";
-    else if (tier===0) el.innerHTML = `3만원 이상 구매 시 상품권이 지급됩니다. (입력: ${won(amount)}원)`;
-    else el.innerHTML = `지급 기준액: <b style="color:${tier>=10000?col10:col5}">${won(tier)}원 상품권</b>`;
-
-    // 이름+생년월일 준비 전 → 배너는 안내만
+    const phone = digitsOnly($("fPhone").value);
+    amountHint(amount);
     if (!nameBirthReady){
       lastAuth = null;
       $("historyBox").className="histbox";
@@ -1162,65 +1252,62 @@ function startApp(){
         : "이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.";
       return;
     }
-
-    // 같은 사람이면 재조회 없이 즉시 렌더(금액만 바뀐 경우 등)
-    if (lastAuth && lastAuth.name===name && lastAuth.birth===birth && lastAuth.year===year){
+    if (lastAuth && lastAuth.name===name && lastAuth.birth===birth && lastAuth.year===year && lastAuth.phone===phone){
       renderElig(lastAuth); return;
     }
-    // 공용 데이터 조회(디바운스) — 다른 담당자·지난 회차 입력분까지 반영
     elig.className = "hint"; elig.removeAttribute("style"); elig.textContent = "환급 가능 여부 확인 중…";
     clearTimeout(eligTimer);
     const myToken = ++eligToken;
     eligTimer = setTimeout(async ()=>{
       const data = await authPaid(name, birth, year);
-      if (myToken !== eligToken) return;          // 조회 중 입력이 바뀌면 무시
-      lastAuth = { ...data, name, birth, year };
+      const phoneUsed = await phoneUsedByOther(phone, year, data.key, cn, birth);
+      const budgetIssued = await budgetIssuedFor($("fDate").value);
+      if (myToken !== eligToken) return;
+      lastAuth = { ...data, name, birth, year, phone, phoneUsed, budgetIssued };
       renderElig(lastAuth);
     }, 350);
   }
   function renderElig(data){
     const elig = $("eligCheck"), box = $("historyBox"); box.className="histbox";
-    const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
+    const col10 = "var(--dancheong-red)", colOk = "var(--dancheong-blue)";
     const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
-    const tier = couponFor(amount);
     const phone = digitsOnly($("fPhone").value);
-    const { name, birth, year, paid, recs } = data;
-    const remaining = PAYOUT_CAP - paid;
-    const grant = amount>0 ? Math.max(0, Math.min(tier, remaining)) : 0;
-
-    elig.className = remaining<=0 ? "elig-no" : "elig-ok";
+    const { name, birth, year, paid, recs, phoneUsed, recordExists, budgetIssued } = data;
+    const decision = amount>=MIN_PURCHASE
+      ? decidePayout({ amount, paid, phoneUsed, recordExists, budgetIssued, dailyBudget })
+      : null;
     let head;
-    if (remaining<=0){
-      head = `<b style="color:${col10}">✗ 환급 불가</b> · 한도(${won(PAYOUT_CAP)}원)를 모두 수령한 고객입니다.`;
-    } else if (paid>0){
-      head = `<b style="color:${col5}">✓ 환급 가능</b> · 남은 한도 <b>${won(remaining)}원</b> <span style="color:var(--ink-soft)">(기존 ${won(paid)}원 수령)</span>`;
+    if (paid>0 && !(decision && decision.ok)){
+      head = `<b style="color:${col10}">✗ 추가 환급 없음</b> · ${decision ? esc(decision.message) : `올해 ${won(paid)}원을 이미 받았습니다. 1인 연 1회(1만원)입니다.`}`;
+    } else if (amount>0 && amount<MIN_PURCHASE){
+      head = `<b style="color:${col10}">✗ 지급 대상 아님</b> · 3만원 이상 구매 시 10,000원이 환급됩니다. (입력: ${won(amount)}원)`;
+    } else if (!decision){
+      head = paid>0
+        ? `<b style="color:${col10}">✗ 추가 환급 없음</b> · 올해 ${won(paid)}원을 이미 받았습니다. 1인 연 1회(1만원)입니다.`
+        : `<b style="color:${colOk}">✓ 첫 접수 가능</b> · 3만원 이상이면 10,000원, 1인 연 1회`;
+    } else if (!decision.ok){
+      head = `<b style="color:${col10}">✗ 환급 불가</b> · ${esc(decision.message)}`;
     } else {
-      head = `<b style="color:${col5}">✓ 환급 가능</b> · 첫 접수 <span style="color:var(--ink-soft)">(한도 ${won(PAYOUT_CAP)}원)</span>`;
+      head = `<b style="color:${colOk}">✓ 환급 가능</b> · 이번 지급 <b>10,000원</b> <span style="color:var(--ink-soft)">(1인 연 1회)</span>`;
     }
-    if (amount>0 && remaining>0 && tier>0){
-      head += `<br>이번 지급 예정: <b style="color:${grant>=10000?col10:col5}">${won(grant)}원</b>${grant<tier?` <span style="color:${col10}">(남은 한도만큼만)</span>`:""}`;
-    }
+    elig.className = (paid>0 && !(decision && decision.ok)) || (amount>0 && amount<MIN_PURCHASE) || (decision && !decision.ok) ? "elig-no" : "elig-ok";
     elig.innerHTML = head;
 
     if (recs && recs.length>0){
       const items = [...recs].sort((a,b)=>(a.date>b.date?1:-1)).map(x=>
         `<div class="h-item"><span>${esc(x.date)} · ${esc(x.district||"-")}</span><span>${won(x.coupon)}원</span></div>`).join("");
       const diffPhone = phone && recs.some(x=> digitsOnly(x.phone) && digitsOnly(x.phone)!==phone);
-      const warn = remaining<=0
-        ? `<div class="h-warn">⚠ 누적 한도(${won(PAYOUT_CAP)}원) 도달 — 더 이상 지급할 수 없습니다.</div>`
-        : (amount>0 && tier>0 && grant<tier ? `<div class="h-warn">⚠ 남은 한도가 ${won(remaining)}원이라 이번엔 ${won(grant)}원만 지급됩니다.</div>` : "");
-      const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인 여부를 확인하세요.</div>` : "";
-      box.className = "histbox show" + (remaining<=0?" cap":"");
+      const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 같은 이름·생년월일 내역이 있습니다. 같은 사람이면 추가 지급은 되지 않습니다.</div>` : "";
+      box.className = "histbox show" + (decision && !decision.ok ? " cap" : "");
       box.innerHTML =
         `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · ${esc(year)}년 수령 내역</div>`
         + items
-        + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원 / 남은 한도 ${won(Math.max(0,remaining))}원</span></div>`
-        + (remaining>0 && amount>0 ? `<div class="h-next">이번 지급 예정: ${won(grant)}원 (지급 시 누적 ${won(paid+grant)}원 / 잔여 ${won(remaining-grant)}원)</div>` : "")
-        + warn + phoneWarn;
+        + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원 / 한도 ${won(PAYOUT_CAP)}원</span></div>`
+        + phoneWarn;
     }
   }
   ["fName","fPhone","fAmount","fDate"].forEach(id => $(id).addEventListener("input", updatePreview));
-  $("fDate").addEventListener("change", updatePreview);
+  $("fDate").addEventListener("change", ()=>{ subscribeBudget($("fDate").value); updatePreview(); });
   [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
 
   /* ---------- 휴대폰 번호 자동 하이픈 (010-1234-5678) ---------- */
@@ -1229,7 +1316,6 @@ function startApp(){
     let f = d;
     if (d.length > 7)      f = d.slice(0,3)+"-"+d.slice(3,7)+"-"+d.slice(7);
     else if (d.length > 3) f = d.slice(0,3)+"-"+d.slice(3);
-    // 하이픈을 지우는 중이면 끝의 '-'는 다시 붙이지 않음
     if (e.inputType === "deleteContentBackward" && f.endsWith("-")) f = f.slice(0,-1);
     $("fPhone").value = f;
   });
@@ -1240,156 +1326,186 @@ function startApp(){
     $("fAmount").value = d ? Number(d).toLocaleString("ko-KR") : "";
   });
 
-  /* ---------- 중복키 (이름+생년월일 2개 기준) ---------- */
-  async function makeDupKey(name, birth){
-    const raw = cleanName(name) + "|" + birth;      // 전화번호 제외 — 이름+생년월일로 동일인 판정
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
-  }
-
   /* ---------- 폼 초기화 (다음 사람 입력) ---------- */
   function resetForm(clearMsg){
     ["fName","fPhone","fAmount","fAddress","fStore"].forEach(id=>$(id).value="");
     clearBirth(); $("fDistrict").value="";
     $("fConsent").checked=false; $("fMarketing").checked=false;
-    $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
+    $("couponPreview").textContent="금액을 입력하면 지급될 환급액이 표시됩니다.";
     const eg=$("eligCheck"); eg.className="hint"; eg.removeAttribute("style"); eg.textContent="이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.";
     lastAuth = null;
+    pendingException = null;
     $("historyBox").className="histbox"; $("historyBox").innerHTML="";
     checkStore();
     if (clearMsg){ const e=$("entryResult"); e.className="result"; e.innerHTML=""; }
     $("fName").focus();
-    // 신청일자(날짜)는 같은 날 연속 접수를 위해 그대로 유지
   }
   $("resetBtn").onclick = ()=> resetForm(true);
-  // 경고/완료 메시지 안의 버튼 (다음 사람 입력 / 예외 지급)
   $("entryResult").addEventListener("click", e=>{
     if (e.target.closest(".next-btn")) resetForm(true);
     else if (e.target.closest(".exc-btn")) doException();
   });
 
+  function budgetIssuedOf(snap){ return snap.exists() ? (Number(snap.data().issued)||0) : 0; }
+  function explainFs(e){
+    const code = e && (e.code||"");
+    if (String(code).includes("permission-denied")) return "저장이 거부되었습니다. 금액, 한도, 휴대폰, 하루 예산 조건을 확인해 주세요.";
+    if (String(code).includes("failed-precondition") || String(code).includes("aborted")) return "다른 접수와 겹쳤습니다. 다시 한 번 눌러 주세요.";
+    return "네트워크/권한 오류: " + (code || e.message || e);
+  }
+  async function releasePendingPhone(phoneRef, dupKey){
+    try {
+      await runTransaction(db, async (tx)=>{
+        const ps = await tx.get(phoneRef);
+        if (ps.exists() && ps.data().pending && ps.data().dupKey===dupKey) tx.delete(phoneRef);
+      });
+    } catch(_){}
+  }
+  async function reserveAndSave(payload){
+    const { date, name, nameNorm, birth, phone, district, address, store, storeCat, marketing, amount, dupKey, year, paidHint, allowCapBypass } = payload;
+    const phoneRef = doc(db, "applications", phoneLockId(phone, year));
+    const recRef = doc(db, "applications", allowCapBypass ? exceptionDocId(dupKey, year, phone) : personDocId(nameNorm, birth, year));
+    const legacyRef = doc(db, "applications", legacyLockId(nameNorm, birth, year));
+    const ledgerRef = doc(db, "applications", ledgerDocId(dupKey, year));
+    const budgetRef = doc(db, "applications", "budget_" + date);
+    const readState = async (tx)=>{
+      const phoneSnap = await tx.get(phoneRef);
+      const recSnap = await tx.get(recRef);
+      const legacySnap = await tx.get(legacyRef);
+      const ledgerSnap = await tx.get(ledgerRef);
+      const budgetSnap = await tx.get(budgetRef);
+      const legacyPaid = legacySnap.exists() ? (Number(legacySnap.data().paid)||0) : 0;
+      const paid = Math.max(ledgerSnap.exists() ? (Number(ledgerSnap.data().paid)||0) : 0, legacyPaid, Number(paidHint)||0);
+      const conflict = phoneSnap.exists() ? phoneConflict(phoneSnap.data(), dupKey) : "free";
+      return { phoneSnap, recSnap, legacySnap, ledgerSnap, budgetSnap, paid, legacyPaid, conflict };
+    };
+    const assess = (st, bypass)=>{
+      const bypassOk = !!(bypass && st.conflict!=="other" && st.conflict!=="used");
+      return decidePayout({
+        amount,
+        paid: st.paid,
+        phoneUsed: st.conflict==="other",
+        recordExists: !bypassOk && (st.conflict==="used" || (!bypass && (st.recSnap.exists() || st.legacyPaid>0))),
+        budgetIssued: budgetIssuedOf(st.budgetSnap),
+        dailyBudget,
+        allowCapBypass: bypassOk
+      });
+    };
+
+    const phase1 = await runTransaction(db, async (tx)=>{
+      const st = await readState(tx);
+      const decision = assess(st, allowCapBypass);
+      if (!decision.ok) return { decision, paid: st.paid };
+      if (st.conflict==="free"){
+        tx.set(phoneRef, { phoneLock:true, pending:true, phone, nameNorm, birth, year, dupKey, operatorUid: currentUid });
+      }
+      return { decision, paid: st.paid };
+    });
+    if (!phase1.decision.ok) return phase1;
+
+    try {
+      return await runTransaction(db, async (tx)=>{
+        const st = await readState(tx);
+        const decision = assess(st, allowCapBypass);
+        if (!decision.ok){
+          if (st.phoneSnap.exists() && st.phoneSnap.data().pending && st.phoneSnap.data().dupKey===dupKey && !st.recSnap.exists()) tx.delete(phoneRef);
+          return { decision, paid: st.paid };
+        }
+        if (st.conflict==="free"){
+          return { decision: { ok:false, grant:0, code:"retry", message:"접수 확인에 실패했습니다. 다시 시도해 주세요." }, paid: st.paid };
+        }
+        const nextPaid = st.paid + PAYOUT_AMOUNT;
+        const body = {
+          date, name, nameNorm, birth, phone, district, address, store, storeCat,
+          amount, coupon: PAYOUT_AMOUNT, marketing, dupKey, ledgerId: ledgerDocId(dupKey, year),
+          operatorUid: currentUid, operatorEmail: (currentEmail||"").toLowerCase(), createdAt: serverTimestamp()
+        };
+        if (allowCapBypass){ body.exception = true; body.approvedBy = currentEmail; }
+        tx.set(recRef, body);
+        tx.set(ledgerRef, { ledger:true, paid: nextPaid, dupKey, year, updatedAt: serverTimestamp() }, { merge:true });
+        tx.set(budgetRef, { budget:true, date, issued: budgetIssuedOf(st.budgetSnap) + PAYOUT_AMOUNT }, { merge:true });
+        tx.set(phoneRef, { phoneLock:true, pending:false, phone, nameNorm, birth, year, dupKey, operatorUid: currentUid }, { merge:true });
+        tx.set(legacyRef, { legacyLock:true, nameNorm, birth, year, paid: nextPaid, dupKey }, { merge:true });
+        return { decision, paid: st.paid };
+      });
+    } catch(e){
+      await releasePendingPhone(phoneRef, dupKey);
+      throw e;
+    }
+  }
+
   /* ---------- 접수 ---------- */
+  let submitting = false;
+  let pendingException = null;
+  function showDecision(decision, extra){
+    const r = $("entryResult");
+    r.className = "result dup show";
+    const canExc = !!(decision.code==="cap" && extra && extra.allowException);
+    pendingException = canExc ? extra.payload : null;
+    const warnPhone = extra && extra.diffPhone
+      ? `<div style="font-size:12px;color:var(--dancheong-red);margin-top:6px">⚠ 같은 이름·생년월일인데 전화번호가 다릅니다. 다른 사람(동명이인)이면 대표만 예외 지급할 수 있습니다.</div>` : "";
+    const buttons = `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">`
+      + (canExc ? `<button class="exc-btn" style="background:var(--dancheong-gold);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">예외 지급 (대표)</button>` : "")
+      + `<button class="next-btn" style="background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">다음 사람 입력 ▶</button></div>`;
+    r.innerHTML = `<span class="big">⚠ ${esc(blockTitle(decision.code))}</span>${esc(decision.message)}${warnPhone}${buttons}`;
+  }
   $("submitBtn").onclick = async () => {
+    if (submitting) return;
     const r = $("entryResult"); r.className="result";
     const name = $("fName").value.trim();
     const birth = getBirth();
-    const phoneRaw = $("fPhone").value.replace(/\D/g,"");
     const district = $("fDistrict").value;
     const address = $("fAddress").value.trim();
     const store = $("fStore").value.trim();
     const storeCat = (findStore(store)||{}).cat || "";
     const marketing = $("fMarketing").checked;
-    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
     const date = $("fDate").value;
+    const form = validateEntry({ date, name, birth, phone: $("fPhone").value, district, amount: $("fAmount").value, consent: $("fConsent").checked });
+    if (!form.ok){ const e0=form.errors[0]; toast(r,"warn",blockTitle(e0.code), e0.message); return; }
+    const quick = decidePayout({ amount: form.amount, paid:0, budgetIssued:0, dailyBudget });
+    if (!quick.ok){ toast(r,"warn",blockTitle(quick.code), quick.message); return; }
 
-    if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
-    if (birth==="INVALID"){ toast(r,"warn","생년월일 확인","생년월일이 올바르지 않습니다. (예: 1979 / 10 / 10)"); return; }
-    if (!/^01\d{8,9}$/.test(phoneRaw)){ toast(r,"warn","전화번호 확인","올바른 휴대폰 번호를 입력하세요."); return; }
-    if (!district){ toast(r,"warn","지역 선택","거주 지역(구)을 선택하세요."); return; }
-    if (!$("fConsent").checked){ toast(r,"warn","동의 필요","개인정보 수집·이용에 동의해야 접수할 수 있습니다."); return; }
-
-    const tier = couponFor(amount);
-    if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
-
-    const dupKey = await makeDupKey(name, birth);
-    const yr = yearOf(date);
-    const CAP = PAYOUT_CAP;                               // 1인 연도별 누적 지급 한도
-    // 공용 데이터로 누적 조회 — 다른 담당자·지난 회차 입력분까지 반영(화면 캐시에만 의존하지 않음)
-    const authInfo = await authPaid(name, birth, yr);
-    const paidClient = authInfo.paid;
-    const ledgerId = "ledger_" + dupKey + "_" + yr;      // 사람×연도별 누적 원장
-    const diffPhone = (authInfo.recs||[]).some(x => digitsOnly(x.phone) && digitsOnly(x.phone)!==phoneRaw);
-
-    // 이미 한도 초과면 즉시 차단(서버 요청 전) — 예외 지급 버튼 제공
-    if (CAP - paidClient <= 0){
-      showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
-      return;
-    }
-
-    $("submitBtn").disabled = true;
+    submitting = true; $("submitBtn").disabled = true;
     try{
-      // 트랜잭션: 여러 기기가 같은 손님을 동시에 접수해도 한도를 안전하게 순차 처리
-      const ledgerRef = doc(db, "applications", ledgerId);
-      const budgetRef = doc(db, "applications", "budget_" + date);
-      const result = await runTransaction(db, async (tx)=>{
-        const ls = await tx.get(ledgerRef);
-        const bs = await tx.get(budgetRef);                          // 쓰기 전에 모두 읽기
-        const paid = ls.exists() ? (ls.data().paid||0) : paidClient; // 원장 없으면 기존 데이터 합계로 초기화
-        const rem = CAP - paid;
-        if (rem <= 0) return { blocked:true, paid };
-        const g = Math.min(tier, rem);
-        tx.set(ledgerRef, { ledger:true, paid: paid + g, dupKey, year: yr, updatedAt: serverTimestamp() }, { merge:true });
-        tx.set(budgetRef, { budget:true, date, issued: (bs.exists()?(bs.data().issued||0):0) + g }, { merge:true });
-        const recRef = doc(collection(db, "applications"));
-        tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, storeCat, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
-        return { blocked:false, paid, grant:g };
+      const dupKey = await makeDupKey(name, birth);
+      const info = await authPaid(name, birth, form.year);
+      const phoneUsed = await phoneUsedByOther(form.phone, form.year, dupKey, form.nameNorm, birth);
+      const budgetIssued = await budgetIssuedFor(date);
+      const diffPhone = (info.recs||[]).some(x => digitsOnly(x.phone) && digitsOnly(x.phone)!==form.phone);
+      const decision = decidePayout({
+        amount: form.amount, paid: info.paid, phoneUsed, recordExists: info.recordExists,
+        budgetIssued, dailyBudget
       });
-
-      if (result.blocked){
-        showCapBlocked(result.paid, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:result.paid }, diffPhone);
+      const payload = { date, name, nameNorm: form.nameNorm, birth, phone: form.phone, district, address, store, storeCat, marketing, amount: form.amount, dupKey, year: form.year, paidHint: info.paid };
+      if (!decision.ok){
+        showDecision(decision, { diffPhone, allowException: isMaster && decision.code==="cap" && diffPhone && !phoneUsed, payload });
         return;
       }
-      const { paid, grant } = result;
-      const totalNow = paid + grant;
+      const saved = await reserveAndSave(payload);
+      if (!saved.decision.ok){ showDecision(saved.decision, { diffPhone, allowException: false, payload }); return; }
       r.className="result ok show";
-      let note = "";
-      if (grant < tier){
-        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 원래 ${won(tier)}원 대상이나 남은 한도가 ${won(CAP-paid)}원이라 <b>${won(grant)}원</b>만 지급 (누적 ${won(totalNow)}원, 한도 도달)</span>`;
-      } else if (paid>0){
-        note = `<br><span style="font-size:12px;color:var(--dancheong-gold)">※ 기존 ${won(paid)}원 + 이번 ${won(grant)}원 = 누적 ${won(totalNow)}원${totalNow>=CAP?" (한도 도달)":` / 잔여 ${won(CAP-totalNow)}원`}</span>`;
-      } else if (totalNow>=CAP){
-        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 한도(${won(CAP)}원)에 도달하여 이후에는 지급되지 않습니다.</span>`;
-      }
-      r.innerHTML = `<span class="big">✔ ${won(grant)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)${note}`;
-      resetForm(false);   // 입력값만 비우고 위 완료 메시지는 유지
-    }catch(e){ toast(r,"warn","저장 실패","네트워크/권한 오류: "+ (e.code||e.message||e)); }
-    finally{ $("submitBtn").disabled=false; }
+      r.innerHTML = `<span class="big">✔ ${won(PAYOUT_AMOUNT)}원 환급</span>${esc(name)} 님 접수 완료. (구매 ${won(form.amount)}원)<br><span style="font-size:12px;color:var(--dancheong-red)">1인 연 1회(1만원) 한도에 도달하여 올해는 추가 지급되지 않습니다.</span>`;
+      resetForm(false);
+    }catch(e){ toast(r,"warn","저장 실패", explainFs(e)); }
+    finally{ submitting=false; $("submitBtn").disabled=false; }
   };
   function toast(el,kind,title,msg){ el.className="result "+(kind==="warn"?"dup":"ok")+" show"; el.innerHTML=`<span class="big">${esc(title)}</span>${esc(msg)}`; }
 
-  /* ---------- 한도 초과 차단 + 예외 지급 ---------- */
-  let pendingException = null;
-  function showCapBlocked(paid, data, diffPhone){
-    pendingException = data;
-    const r = $("entryResult");
-    r.className="result dup show";
-    const warnPhone = diffPhone
-      ? `<div style="font-size:12px;color:var(--dancheong-red);margin-top:6px">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인이면 지급 불가, <b>다른 사람(동명이인)이면 대표 관리자 확인 후 예외 지급</b>하세요.</div>`
-      : "";
-    r.innerHTML = `<span class="big">⚠ 지급 한도 초과</span>이미 한도(<b>${won(PAYOUT_CAP)}원</b>)를 모두 지급받으신 고객님입니다. (기존 수령 ${won(paid)}원)`
-      + warnPhone
-      + `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">`
-      + `<button class="exc-btn" style="background:var(--dancheong-gold);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">예외 지급 (대표 승인)</button>`
-      + `<button class="next-btn" style="background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">다음 사람 입력 ▶</button>`
-      + `</div>`;
-  }
   async function doException(){
     const p = pendingException;
-    if (!p) return;
-    if (!confirm(`예외 지급 승인\n\n${p.name} 님에게 한도를 초과하여 ${won(p.tier)}원을 지급합니다.\n대표 관리자 확인 하에 진행하세요. 계속할까요?`)) return;
-    $("submitBtn").disabled = true;
+    if (!p || !isMaster){ alert("예외 지급은 대표 관리자만 할 수 있습니다."); return; }
+    if (!confirm(`예외 지급\n\n${p.name} 님은 올해 이미 한도를 받았습니다.\n전화번호가 다른 동명이인이 맞는지 확인한 뒤 ${won(PAYOUT_AMOUNT)}원을 지급합니다.\n하루 예산과 3만원 기준은 그대로 적용됩니다. 계속할까요?`)) return;
+    submitting = true; $("submitBtn").disabled = true;
     try{
-      const ledgerRef = doc(db, "applications", p.ledgerId);
-      const budgetRef = doc(db, "applications", "budget_" + p.date);
-      await runTransaction(db, async (tx)=>{
-        const ls = await tx.get(ledgerRef);
-        const bs = await tx.get(budgetRef);
-        const paid = ls.exists() ? (ls.data().paid||0) : p.paid;
-        tx.set(ledgerRef, { ledger:true, paid: paid + p.tier, dupKey:p.dupKey, year:p.yr, updatedAt: serverTimestamp() }, { merge:true });
-        tx.set(budgetRef, { budget:true, date:p.date, issued: (bs.exists()?(bs.data().issued||0):0) + p.tier }, { merge:true });
-        const recRef = doc(collection(db, "applications"));
-        tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store, storeCat:p.storeCat,
-          amount:p.amount, coupon:p.tier, marketing:p.marketing, dupKey:p.dupKey, ledgerId:p.ledgerId,
-          operatorUid: currentUid, operatorEmail: currentEmail, exception:true, approvedBy: currentEmail, createdAt: serverTimestamp() });
-      });
+      const saved = await reserveAndSave({ ...p, allowCapBypass:true });
+      if (!saved.decision.ok){ showDecision(saved.decision, { allowException:false }); return; }
       const r = $("entryResult");
       r.className="result ok show";
-      r.innerHTML = `<span class="big">✔ 예외 지급 ${won(p.tier)}원</span>${esc(p.name)} 님 · 한도 초과 예외 승인 (처리: ${esc(currentEmail)})<br><button class="next-btn" style="background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;margin-top:10px">다음 사람 입력 ▶</button>`;
+      r.innerHTML = `<span class="big">✔ 예외 지급 ${won(PAYOUT_AMOUNT)}원</span>${esc(p.name)} 님 · 동명이인 예외 (처리: ${esc(currentEmail)})<br><button class="next-btn" style="background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;margin-top:10px">다음 사람 입력 ▶</button>`;
       pendingException = null; resetForm(false);
-    }catch(e){ alert("예외 지급 실패: "+(e.code||e.message||e)); }
-    finally{ $("submitBtn").disabled=false; }
+    }catch(e){ alert("예외 지급 실패: "+explainFs(e)); }
+    finally{ submitting=false; $("submitBtn").disabled=false; }
   }
-
   /* ---------- 통계 ---------- */
   function statsSource(ignoreOp){
     const y = $("statYear").value;            // "" = 전체 연도
@@ -1406,20 +1522,27 @@ function startApp(){
   }
   function renderStats(){
     const rows = statsSource();                // 카드: 선택한 담당자(또는 전체) 기준
-    const c10 = rows.filter(r=>r.coupon===10000).length;
-    const total = rows.reduce((s,r)=>s+(r.coupon||0),0);
-    const vouchers = Math.round(total/5000);   // 실물 5,000원권 매수 (1만원 지급 = 2매)
-    const rem = dailyBudget - total;
+    const total = rows.reduce((s,r)=>s+(Number(r.coupon)||0),0);
+    const vouchers = summarizeVouchers(rows.map(r=>r.coupon));
     const op = isMaster ? $("statOperator").value : "";
+    const dayMode = $("statScope").value!=="all";
+    const statDate = $("statDate").value;
+    const focusDate = (dayMode && statDate) ? statDate : (budgetWatchDate || defaultEventDate(todayStr()));
+    let issuedForRemain = todayBudget;
+    let remainNote = `${focusDate} 하루 예산 ${won(dailyBudget)}원 기준`;
+    if (focusDate === budgetWatchDate) issuedForRemain = todayBudget;
+    else if (isMaster) issuedForRemain = records.filter(r=>r.date===focusDate).reduce((s,r)=>s+(Number(r.coupon)||0),0);
+    else remainNote = `${budgetWatchDate || focusDate} 하루 예산 ${won(dailyBudget)}원 기준`;
+    const remain = budgetStatusText(issuedForRemain, dailyBudget);
     // 라벨: 대표는 전체/선택 담당자, 담당자는 '내 접수'
     $("statScopeLabel").textContent = !isMaster ? "내 신청 인원" : (op ? "신청 인원("+op+")" : "신청 인원(전체)");
     $("sTotalLabel").textContent = !isMaster ? "내 총 지급 금액" : (op ? "지급 금액("+op+")" : "전체 총 지급 금액");
     $("sCount").textContent = rows.length;
-    $("sVouchers").innerHTML = won(vouchers)+'<span style="font-size:14px">매</span>';
-    $("sVoucherNote").textContent = c10>0 ? `1만원 지급 ${c10}명 = 각 2매` : "전원 1매";
+    $("sVouchers").innerHTML = vouchers.sheetLabel+'<span style="font-size:14px">매</span>';
+    $("sVoucherNote").textContent = vouchers.note;
     $("sTotal").textContent = won(total)+"원";
-    $("sRemain").textContent = (rem>=0 ? won(rem) : "초과 "+won(-rem))+"원";
-    $("sRemainNote").textContent = `하루 예산 ${won(dailyBudget)}원 기준`;
+    $("sRemain").textContent = (remain.remaining>=0 ? won(remain.remaining) : "초과 "+won(-remain.remaining))+"원";
+    $("sRemainNote").textContent = remainNote;
 
     // 계정(담당자)별 집계 — 대표 관리자만 (담당자 선택과 무관하게 항상 전체 계정 표시)
     if (isMaster){
@@ -1533,7 +1656,7 @@ function startApp(){
     $("edValue").value = won(r.coupon);
     $("edMsg").style.color=""; $("edMsg").textContent="";
     $("edNameHint").style.color=""; $("edNameHint").textContent="이름을 고치면 중복·누적 한도 기준도 함께 옮겨집니다.";
-    $("edHint").textContent = `참고: 구매금액 ${won(r.amount)}원 기준 지급액은 ${won(couponFor(r.amount))}원입니다.`;
+    $("edHint").textContent = `기준 지급액은 10,000원입니다. 구매 ${won(r.amount)}원 · 현재 ${won(r.coupon)}원. 예전 5,000원은 유지하거나 0원으로만 바꿀 수 있습니다.`;
     editModal.classList.add("show");
   }
   function closeEdit(){ editModal.classList.remove("show"); editingId=null; }
@@ -1552,8 +1675,10 @@ function startApp(){
     const nname = $("edName").value.trim();
     const msg = $("edMsg"); msg.style.color="";
     if (cleanName(nname).length < 2){ msg.textContent="이름을 2글자 이상 입력하세요."; return; }
-    if (!Number.isFinite(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
-    if (nv % 5000 !== 0){ msg.textContent="실물이 5,000원권이므로 5,000원 단위로 입력하세요."; return; }
+    if (!Number.isInteger(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
+    if (![0,5000,10000].includes(nv)){ msg.textContent="지급액은 0원 또는 10,000원만 입력할 수 있습니다. 예전 5,000원 기록은 그 금액으로 남길 수 있습니다."; return; }
+    if (nv===5000 && (r.coupon||0)!==5000){ msg.textContent="5,000원은 예전에 지급된 기록을 유지할 때만 가능합니다."; return; }
+    if ((r.coupon||0)===5000 && nv===10000){ msg.textContent="기존 5,000원 기록은 1만원으로 올릴 수 없습니다. 잘못 입력했다면 0원으로 비우거나 삭제한 뒤 다시 접수하세요."; return; }
     const nameChanged = nname !== r.name;
     if (nv === (r.coupon||0) && !nameChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
 
@@ -1563,7 +1688,7 @@ function startApp(){
     let newDupKey = r.dupKey, newLid = oldLid, moveLedger = false, seedPaid = 0;
     if (nameChanged){
       newDupKey = await makeDupKey(nname, r.birth);
-      newLid = "ledger_" + newDupKey + "_" + yearOf(r.date);
+      newLid = ledgerDocId(newDupKey, yearOf(r.date));
       moveLedger = (newLid !== oldLid);
       if (moveLedger){
         // 새 이름으로 이미 접수된 같은 사람의 기존 지급액(이 건 제외)
@@ -1580,34 +1705,67 @@ function startApp(){
     $("edSaveBtn").disabled = true;
     try{
       const budgetRef = r.date ? doc(db,"applications","budget_"+r.date) : null;
-      await runTransaction(db, async (tx)=>{
-        // 읽기 먼저 (트랜잭션 규칙)
+      const yr = yearOf(r.date);
+      const oldNorm = r.nameNorm || cleanName(r.name);
+      const newNorm = cleanName(nname);
+      const oldLegacyRef = oldNorm && r.birth ? doc(db,"applications", legacyLockId(oldNorm, r.birth, yr)) : null;
+      const newLegacyRef = newNorm && r.birth && newNorm!==oldNorm ? doc(db,"applications", legacyLockId(newNorm, r.birth, yr)) : oldLegacyRef;
+      const phone = digitsOnly(r.phone);
+      const phoneRef = isValidPhone(phone) ? doc(db,"applications", phoneLockId(phone, yr)) : null;
+      const oldCoupon = Number(r.coupon)||0;
+      const outcome = await runTransaction(db, async (tx)=>{
         const oldLs = oldLid ? await tx.get(doc(db,"applications",oldLid)) : null;
         const newLs = moveLedger ? await tx.get(doc(db,"applications",newLid)) : null;
         const bs = budgetRef ? await tx.get(budgetRef) : null;
-
+        const oldLeg = oldLegacyRef ? await tx.get(oldLegacyRef) : null;
+        const newLeg = newLegacyRef && newLegacyRef!==oldLegacyRef ? await tx.get(newLegacyRef) : oldLeg;
+        const phoneSnap = phoneRef ? await tx.get(phoneRef) : null;
+        let oldPaidAfter = 0, newPaidAfter = 0;
         if (moveLedger){
-          // 이전 이름 원장에서 이 건 금액 차감
-          if (oldLs && oldLs.exists()){
-            const p = Math.max(0, (oldLs.data().paid||0) - (r.coupon||0));
-            tx.set(doc(db,"applications",oldLid), { paid:p }, { merge:true });
-          }
-          // 새 이름 원장에 이 건 금액 반영 (없으면 기존 합계로 초기화)
-          const base = (newLs && newLs.exists()) ? (newLs.data().paid||0) : seedPaid;
-          tx.set(doc(db,"applications",newLid),
-            { ledger:true, paid: base + nv, dupKey:newDupKey, year: yearOf(r.date), updatedAt: serverTimestamp() }, { merge:true });
-        } else if (oldLid && oldLs && oldLs.exists() && delta !== 0){
-          const p = Math.max(0, (oldLs.data().paid||0) + delta);
-          tx.set(doc(db,"applications",oldLid), { paid:p }, { merge:true });
+          oldPaidAfter = (oldLs && oldLs.exists()) ? Math.max(0, (Number(oldLs.data().paid)||0) - oldCoupon) : 0;
+          const base = (newLs && newLs.exists()) ? (Number(newLs.data().paid)||0) : seedPaid;
+          newPaidAfter = base + nv;
+        } else {
+          newPaidAfter = (oldLs && oldLs.exists()) ? Math.max(0, (Number(oldLs.data().paid)||0) + delta) : Math.max(0, oldCoupon + delta);
+          oldPaidAfter = newPaidAfter;
         }
-        if (budgetRef && bs && bs.exists() && delta !== 0){
-          const iss = Math.max(0, (bs.data().issued||0) + delta);
-          tx.set(budgetRef, { issued:iss }, { merge:true });
+        if (!r.exception && nv>0 && newPaidAfter > PAYOUT_CAP) return "cap";
+        if (delta>0){
+          const issued = bs && bs.exists() ? (Number(bs.data().issued)||0) : 0;
+          if (issued + delta > dailyBudget) return "budget";
+        }
+        const putLegacy = (ref, snap, norm, paid, dup)=>{
+          if (!ref || !norm) return;
+          if (paid>0) tx.set(ref, { legacyLock:true, nameNorm:norm, birth:r.birth, year:yr, paid, dupKey:dup||null }, { merge:true });
+          else if (snap && snap.exists()) tx.delete(ref);
+        };
+        if (moveLedger){
+          if (oldLs && oldLs.exists()) tx.set(doc(db,"applications",oldLid), { paid:oldPaidAfter }, { merge:true });
+          tx.set(doc(db,"applications",newLid), { ledger:true, paid:newPaidAfter, dupKey:newDupKey, year:yr, updatedAt: serverTimestamp() }, { merge:true });
+          putLegacy(oldLegacyRef, oldLeg, oldNorm, oldPaidAfter, r.dupKey);
+          putLegacy(newLegacyRef, newLeg, newNorm, newPaidAfter, newDupKey);
+        } else if (oldLid && oldLs && oldLs.exists() && delta!==0){
+          tx.set(doc(db,"applications",oldLid), { paid:newPaidAfter }, { merge:true });
+          putLegacy(oldLegacyRef, oldLeg, oldNorm, newPaidAfter, r.dupKey);
+        } else {
+          putLegacy(oldLegacyRef, oldLeg, newNorm, newPaidAfter, newDupKey||r.dupKey);
+        }
+        if (budgetRef && delta!==0){
+          const issued = bs && bs.exists() ? (Number(bs.data().issued)||0) : 0;
+          const next = Math.max(0, issued + delta);
+          if (bs && bs.exists()) tx.set(budgetRef, { issued:next }, { merge:true });
+          else if (delta>0) tx.set(budgetRef, { budget:true, date:r.date, issued:next });
+        }
+        if (phoneSnap && phoneSnap.exists() && (!phoneSnap.data().dupKey || phoneSnap.data().dupKey===r.dupKey || phoneSnap.data().dupKey===newDupKey)){
+          tx.set(phoneRef, { nameNorm:newNorm, dupKey:newDupKey||r.dupKey, birth:r.birth, pending: phoneSnap.data().pending===true }, { merge:true });
         }
         const upd = { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() };
-        if (nameChanged){ upd.name = nname; upd.dupKey = newDupKey; upd.ledgerId = newLid; }
+        if (nameChanged){ upd.name = nname; upd.nameNorm = newNorm; upd.dupKey = newDupKey; upd.ledgerId = newLid; }
         tx.set(doc(db,"applications",r.id), upd, { merge:true });
+        return "ok";
       });
+      if (outcome==="cap"){ msg.textContent="수정 후 한도가 1만원을 넘습니다. 1인 연 1회를 유지하려면 금액을 줄이세요."; return; }
+      if (outcome==="budget"){ msg.textContent="하루 예산을 초과하는 금액으로는 올릴 수 없습니다."; return; }
       msg.style.color="var(--dancheong-blue)"; msg.textContent="수정되었습니다.";
       setTimeout(closeEdit, 700);
     }catch(e){ msg.textContent="수정 실패: "+(e.code||e.message||e); }
@@ -1616,22 +1774,41 @@ function startApp(){
 
   /* ---------- 삭제 (원장 차감 포함) ---------- */
   function deleteOneRecord(rec){
-    const lid = rec.ledgerId || (rec.dupKey ? "ledger_"+rec.dupKey+"_"+yearOf(rec.date) : null);
-    const budgetRef = rec.date ? doc(db,"applications","budget_"+rec.date) : null;
-    return runTransaction(db, async (tx)=>{
-      let ls=null, bs=null;
-      if (lid) ls = await tx.get(doc(db,"applications",lid));
-      if (budgetRef) bs = await tx.get(budgetRef);
-      if (lid && ls.exists()){
-        const p = Math.max(0, (ls.data().paid||0) - (rec.coupon||0));
-        tx.set(doc(db,"applications",lid), { paid:p }, { merge:true });
+    const run = (withQuery)=> runTransaction(db, async (tx)=>{
+      const year = yearOf(rec.date);
+      const nameNorm = rec.nameNorm || cleanName(rec.name);
+      const phone = digitsOnly(rec.phone);
+      const dupKey = rec.dupKey || null;
+      const lid = rec.ledgerId || (dupKey ? ledgerDocId(dupKey, year) : null);
+      const budgetRef = rec.date ? doc(db,"applications","budget_"+rec.date) : null;
+      const legacyRef = nameNorm && rec.birth ? doc(db,"applications", legacyLockId(nameNorm, rec.birth, year)) : null;
+      const phoneRef = isValidPhone(phone) ? doc(db,"applications", phoneLockId(phone, year)) : null;
+      const ls = lid ? await tx.get(doc(db,"applications",lid)) : null;
+      const bs = budgetRef ? await tx.get(budgetRef) : null;
+      const legacySnap = legacyRef ? await tx.get(legacyRef) : null;
+      const phoneSnap = phoneRef ? await tx.get(phoneRef) : null;
+      let others = records.filter(x => x.id!==rec.id && x.dupKey && x.dupKey===dupKey && yearOf(x.date)===year);
+      if (withQuery && dupKey){
+        const qs = await tx.get(query(collection(db,"applications"), where("dupKey","==",dupKey)));
+        others = qs.docs.filter(d => d.id!==rec.id && isPayoutRecord({id:d.id, ...d.data()}) && yearOf(d.data().date)===year).map(d=>({id:d.id, ...d.data()}));
       }
-      if (budgetRef && bs.exists()){
-        const iss = Math.max(0, (bs.data().issued||0) - (rec.coupon||0));
+      const nextPaid = ls && ls.exists() ? Math.max(0, (Number(ls.data().paid)||0) - (Number(rec.coupon)||0)) : 0;
+      if (ls && ls.exists()) tx.set(doc(db,"applications",lid), { paid:nextPaid }, { merge:true });
+      if (legacyRef){
+        const still = others.some(d => (Number(d.coupon)||0)>0);
+        const paidLeft = still ? Math.max(nextPaid, others.reduce((s,d)=>s+(Number(d.coupon)||0),0)) : nextPaid;
+        if (paidLeft>0) tx.set(legacyRef, { legacyLock:true, nameNorm, birth:rec.birth, year, paid:paidLeft, dupKey }, { merge:true });
+        else if (legacySnap && legacySnap.exists()) tx.delete(legacyRef);
+      }
+      if (budgetRef && bs && bs.exists()){
+        const iss = Math.max(0, (Number(bs.data().issued)||0) - (Number(rec.coupon)||0));
         tx.set(budgetRef, { issued:iss }, { merge:true });
       }
+      const phoneStill = others.some(d => digitsOnly(d.phone)===phone && (Number(d.coupon)||0)>0);
+      if (phoneRef && phoneSnap && phoneSnap.exists() && !phoneStill && (!phoneSnap.data().dupKey || phoneSnap.data().dupKey===dupKey)) tx.delete(phoneRef);
       tx.delete(doc(db,"applications",rec.id));
     });
+    return run(true).catch(()=>run(false));
   }
   async function bulkDelete(targets, label){
     if (!isMaster){ alert("일괄 삭제는 대표 관리자만 할 수 있습니다."); return; }
@@ -1704,17 +1881,16 @@ function startApp(){
       "알림수신동의": r.marketing ? "동의" : "미동의",
       "입력담당자": r.operatorEmail||""
     }));
-    const c10=rows.filter(r=>r.coupon===10000).length;
-    const totalPaid=rows.reduce((s,r)=>s+(r.coupon||0),0);
     const totalBuy=rows.reduce((s,r)=>s+(r.amount||0),0);
-    const vouchers=Math.round(totalPaid/5000);
+    const vouchers=summarizeVouchers(rows.map(r=>r.coupon));
+    const todayLeft=budgetStatusText(todayBudget, dailyBudget);
     aoa.push({});
     aoa.push({"신청일자": isMaster ? "── 전체 집계 ──" : "── 내 접수 집계 ──"});
     aoa.push({"신청일자":"신청 인원","이름":rows.length+"명"});
-    aoa.push({"신청일자":"5,000원 상품권","이름":vouchers+"매","생년월일":`1만원 지급 ${c10}명(2매)`});
+    aoa.push({"신청일자":"상품권(5천원권)","이름":vouchers.sheetLabel+"매","생년월일":vouchers.note});
     aoa.push({"신청일자":"구매금액 합계","이름":won(totalBuy)+"원"});
-    aoa.push({"신청일자":"지급금액 합계","이름":won(totalPaid)+"원"});
-    aoa.push({"신청일자":"남은 예산(하루 기준)","이름":won(dailyBudget-totalPaid)+"원"});
+    aoa.push({"신청일자":"지급금액 합계","이름":won(vouchers.total)+"원"});
+    aoa.push({"신청일자":"남은 예산","이름":(todayLeft.remaining>=0?won(todayLeft.remaining):"초과 "+won(-todayLeft.remaining))+"원","생년월일":(budgetWatchDate||defaultEventDate(todayStr()))+" 하루 예산 "+won(dailyBudget)+"원 기준"});
     aoa.push({"신청일자":"알림수신 동의","이름":rows.filter(r=>r.marketing).length+"명"});
     // 계정(담당자)별 집계 — 대표 관리자만
     if (isMaster){
@@ -1735,17 +1911,17 @@ function startApp(){
     });
     // 점포별 집계
     aoa.push({});
-    aoa.push({"신청일자":"── 점포별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액","상세주소":"5천원권"});
+    aoa.push({"신청일자":"── 점포별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액","상세주소":"상품권(5천원권)"});
     const smap={}; rows.forEach(r=>{const k=(r.store&&r.store.trim())||"(점포 미입력)"; smap[k]=smap[k]||{n:0,buy:0,pay:0}; smap[k].n++; smap[k].buy+=(r.amount||0); smap[k].pay+=(r.coupon||0);});
     Object.keys(smap).sort((a,b)=>smap[b].pay-smap[a].pay).forEach(k=>{
-      aoa.push({"신청일자":k,"이름":smap[k].n+"건","생년월일":won(smap[k].buy)+"원","거주구":won(smap[k].pay)+"원","상세주소":won(Math.round(smap[k].pay/5000))+"매"});
+      aoa.push({"신청일자":k,"이름":smap[k].n+"건","생년월일":won(smap[k].buy)+"원","거주구":won(smap[k].pay)+"원","상세주소":summarizeVouchers([smap[k].pay]).sheetLabel+"매"});
     });
     // 업종별 집계
     aoa.push({});
-    aoa.push({"신청일자":"── 업종별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액","상세주소":"5천원권"});
+    aoa.push({"신청일자":"── 업종별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액","상세주소":"상품권(5천원권)"});
     const cmap={}; rows.forEach(r=>{const k=(r.storeCat&&r.storeCat.trim())||"(업종 미지정)"; cmap[k]=cmap[k]||{n:0,buy:0,pay:0}; cmap[k].n++; cmap[k].buy+=(r.amount||0); cmap[k].pay+=(r.coupon||0);});
     Object.keys(cmap).sort((a,b)=>cmap[b].pay-cmap[a].pay).forEach(k=>{
-      aoa.push({"신청일자":k,"이름":cmap[k].n+"건","생년월일":won(cmap[k].buy)+"원","거주구":won(cmap[k].pay)+"원","상세주소":won(Math.round(cmap[k].pay/5000))+"매"});
+      aoa.push({"신청일자":k,"이름":cmap[k].n+"건","생년월일":won(cmap[k].buy)+"원","거주구":won(cmap[k].pay)+"원","상세주소":summarizeVouchers([cmap[k].pay]).sheetLabel+"매"});
     });
     const ws = XLSX.utils.json_to_sheet(aoa);
     ws["!cols"]=[{wch:12},{wch:10},{wch:20},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:10},{wch:16},{wch:10},{wch:10},{wch:10},{wch:22},{wch:20},{wch:22},{wch:12},{wch:22}];
