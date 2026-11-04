@@ -207,12 +207,11 @@ service cloud.firestore {
         && d.paid is int
         && d.paid >= 0
         && d.paid <= 100000;
-      if (!shape) return false;
-      if (creating) return d.paid == 10000 || d.paid == 5000 || (isMaster() && d.paid % 10000 == 0 && d.paid > 0);
-      let prev = resource.data.paid is int ? resource.data.paid : 0;
-      if (d.paid <= prev) return true;
-      if (d.paid == prev + 10000 && d.paid <= 10000) return true;
-      return isMaster() && d.paid == prev + 10000;
+      let prev = creating ? 0 : (resource.data.paid is int ? resource.data.paid : 0);
+      let allowed = creating
+        ? (d.paid == 10000 || d.paid == 5000 || (isMaster() && d.paid % 10000 == 0 && d.paid > 0))
+        : (d.paid <= prev || (d.paid == prev + 10000 && d.paid <= 10000) || (isMaster() && d.paid == prev + 10000));
+      return shape && allowed;
     }
     function validBudget(id, creating) {
       let d = request.resource.data;
@@ -222,11 +221,11 @@ service cloud.firestore {
         && id == "budget_" + d.date
         && d.issued is int
         && d.issued >= 0;
-      if (!shape) return false;
-      if (creating) return isEventDate(d.date) && d.issued == 10000 && d.issued <= dailyLimit();
-      let prev = resource.data.issued is int ? resource.data.issued : 0;
-      return (d.issued < prev)
-        || (d.issued == prev + 10000 && d.issued <= dailyLimit());
+      let prev = creating ? 0 : (resource.data.issued is int ? resource.data.issued : 0);
+      let allowed = creating
+        ? (isEventDate(d.date) && d.issued == 10000 && d.issued <= dailyLimit())
+        : (d.issued < prev || (d.issued == prev + 10000 && d.issued <= dailyLimit()));
+      return shape && allowed;
     }
 
     function selfPendingCreate() {
