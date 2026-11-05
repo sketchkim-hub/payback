@@ -2,11 +2,9 @@
  * 문창전통시장 페이백 지급 정책.
  *
  * 신규 지급은 "3만원 이상 구매 → 10,000원" 한 단계다. 5천원 단계는 없다.
- * 한도는 기존과 같이 신청 연도 기준 1인 10,000원이다. 지급액과 같으므로
- * 1인 연 1회(1만원)다. 예전에 5,000원만 받은 사람도 그 해에 한 번 참여한
- * 것으로 보고, 남은 5,000원을 채워 주지 않는다.
- * 사람 식별은 기존 원장과 같게 이름+생년월일이다. 휴대폰 번호는 추가로
- * 같은 해 재사용을 막는다.
+ * 한도는 이번 행사(2026-11-06~07) 1인 1회(1만원)다. 이전 행사 기록은
+ * 연도 키 원장·잠금에 그대로 두고, 이번 회차(2026-11) 문서만 본다.
+ * 사람 식별은 이름+생년월일이고, 휴대폰 번호도 이번 행사 안에서만 막는다.
  */
 
 export const MIN_PURCHASE = 30000;
@@ -17,6 +15,7 @@ export const VOUCHER_UNIT = 5000;
 export const DAILY_BUDGET_CAP = 2500000;
 export const DEFAULT_DAILY_BUDGET = DAILY_BUDGET_CAP;
 export const EVENT_DATES = ["2026-11-06", "2026-11-07"];
+export const EVENT_ID = "2026-11";
 export const DISTRICTS = ["동구", "중구", "서구", "유성구", "대덕구", "그 외"];
 
 export function effectiveDailyBudget(configured) {
@@ -27,6 +26,11 @@ export function effectiveDailyBudget(configured) {
 
 export function isEventDate(date) {
   return EVENT_DATES.includes(String(date || ""));
+}
+
+/** 이번 행사 접수는 2026-11, 그 이전 기록은 연도 키를 유지한다. */
+export function scopeForDate(date) {
+  return isEventDate(date) ? EVENT_ID : yearOf(date);
 }
 
 export function defaultEventDate(today) {
@@ -156,16 +160,16 @@ export function decidePayout(input) {
   if (amount < MIN_PURCHASE) return fail("amount-low", `구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`);
 
   if (input.phoneUsed && (input.allowCapBypass || paid <= 0)) {
-    return fail("phone", "이 휴대폰 번호로 올해 이미 지급된 기록이 있습니다.");
+    return fail("phone", "이 휴대폰 번호로 이번 행사에 이미 지급된 기록이 있습니다.");
   }
   if (!input.allowCapBypass && paid + PAYOUT_AMOUNT > PAYOUT_CAP) {
     const message = paid > 0 && paid < PAYOUT_CAP
-      ? `이미 올해 ${won(paid)}원을 지급받은 고객입니다. 1인 연 1회(1만원)이라 차액을 채우거나 다시 지급할 수 없습니다.`
-      : `이미 올해 한도(${won(PAYOUT_CAP)}원)를 지급받은 고객입니다. 1인 연 1회만 가능합니다.`;
+      ? `이번 행사에서 이미 ${won(paid)}원을 지급받은 고객입니다. 이번 행사 1인 1회(1만원)만 가능합니다.`
+      : `이번 행사 한도(${won(PAYOUT_CAP)}원)를 이미 지급받은 고객입니다. 이번 행사 1인 1회만 가능합니다.`;
     return fail("cap", message);
   }
   if (!input.allowCapBypass && input.recordExists) {
-    return fail("duplicate", "같은 이름·생년월일로 올해 이미 접수된 기록이 있습니다. 1인 연 1회(1만원)만 지급됩니다.");
+    return fail("duplicate", "같은 이름·생년월일로 이번 행사에 이미 접수된 기록이 있습니다. 이번 행사 1인 1회만 지급됩니다.");
   }
   if (issued + PAYOUT_AMOUNT > limit) {
     const rem = Math.max(0, limit - issued);
