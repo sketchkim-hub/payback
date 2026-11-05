@@ -64,21 +64,22 @@ test("예외 지급도 예산과 휴대폰은 넘지 못한다", () => {
   assert.equal(decidePayout({ ...base, amount: 20000, allowCapBypass: true }).code, "amount-low");
 });
 
-test("기존 5천원과 신규 1만원을 같이 집계한다", () => {
+test("온누리상품권 1만원권은 1건당 1매이고 5천원은 매수에 넣지 않는다", () => {
   const mixed = summarizeVouchers([5000, 5000, 10000, 0]);
   assert.equal(mixed.n5, 2);
   assert.equal(mixed.n10, 1);
-  assert.equal(mixed.total, 20000);
-  assert.equal(mixed.sheets, 4);
-  assert.match(mixed.note, /기존 5천원/);
-  assert.match(mixed.note, /1만원/);
+  assert.equal(mixed.total, 10000);
+  assert.equal(mixed.sheets, 1);
+  assert.match(mixed.note, /각 1매/);
+  assert.match(mixed.note, /5천원권\(이전\) 2매/);
   const onlyNew = summarizeVouchers([10000, 10000]);
-  assert.equal(onlyNew.sheets, 4);
-  assert.match(onlyNew.note, /각 2매/);
-  assert.doesNotMatch(onlyNew.note, /5천원 지급/);
+  assert.equal(onlyNew.sheets, 2);
+  assert.match(onlyNew.note, /1만원 지급 2건 = 각 1매/);
+  assert.doesNotMatch(onlyNew.note, /5천원/);
   const onlyOld = summarizeVouchers([5000]);
-  assert.equal(onlyOld.sheets, 1);
-  assert.match(onlyOld.note, /각 1매/);
+  assert.equal(onlyOld.sheets, 0);
+  assert.equal(onlyOld.total, 0);
+  assert.match(onlyOld.note, /5천원권\(이전\) 1매/);
 });
 
 test("하루 예산 문구는 1만원 건수만 보여 준다", () => {
@@ -175,7 +176,6 @@ test("점포명은 두 글자 이상 부분 일치로 찾는다", () => {
 test("화면 문구가 새 지급 조건과 같다", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   assert.match(html, /3만원 이상 구매/);
-  assert.match(html, /10,000원 환급/);
   assert.match(html, /이번 행사 1인 1회/);
   assert.match(html, /id="storeSuggest"/);
   assert.match(html, /점포 명단을 불러오지 못했습니다\(권한\)/);
@@ -184,7 +184,12 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   assert.doesNotMatch(html, /list="storeOptions"/);
   assert.doesNotMatch(html, /1인 연 1회/);
   assert.doesNotMatch(html, /잠금 갱신/);
-  assert.match(html, /상품권 \(5천원권\)/);
+  assert.match(html, /온누리상품권 \(1만원권\)/);
+  assert.match(html, /1만원 지급 1건 = 1매/);
+  assert.match(html, /온누리상품권 1만원권 1매/);
+  assert.doesNotMatch(html, /상품권 \(5천원권\)/);
+  assert.doesNotMatch(html, /각 2매/);
+  assert.doesNotMatch(html, /상품권\(5천원권\)/);
   assert.match(html, /from "\.\/policy\.js"/);
   assert.match(html, /2026-11-06/);
   assert.match(html, /2026-11-07/);
