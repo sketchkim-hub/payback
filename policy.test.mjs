@@ -5,8 +5,8 @@ import {
   MIN_PURCHASE, PAYOUT_AMOUNT, PAYOUT_CAP, MAX_PURCHASE,
   cleanName, couponFor, makeDupKey, decidePayout, summarizeVouchers,
   validateEntry, isPayoutRecord, budgetStatusText, personDocId, phoneLockId,
-  phoneConflict, isValidPhone, isValidBirth, parseWon, effectiveDailyBudget,
-  isEventDate, defaultEventDate, DAILY_BUDGET_CAP
+  phoneConflict, isValidPhone, isValidBirth, parseWon, effectiveDailyBudget, ledgerDocId,
+  isEventDate, defaultEventDate, DAILY_BUDGET_CAP, EVENT_ID, scopeForDate
 } from "./policy.js";
 
 const base = {
@@ -36,7 +36,8 @@ test("한도를 한 번이라도 쓰면 차액을 채우지 않는다", () => {
   assert.equal(partial.ok, false);
   assert.equal(partial.code, "cap");
   assert.match(partial.message, /5,000원/);
-  assert.match(partial.message, /1인 연 1회/);
+  assert.match(partial.message, /이번 행사 1인 1회/);
+  assert.doesNotMatch(partial.message, /올해/);
   assert.equal(decidePayout({ ...base, paid: 10000 }).code, "cap");
   assert.equal(decidePayout({ ...base, recordExists: true }).code, "duplicate");
 });
@@ -144,7 +145,11 @@ test("지급 기록이 아닌 잠금 문서는 집계에서 빠진다", () => {
 
 test("문서 ID는 사람·휴대폰을 나눈다", () => {
   assert.equal(personDocId("홍길동", "1979-10-10", "2026"), "rec_홍길동_1979-10-10_2026");
-  assert.equal(phoneLockId("01012345678", "2026"), "phone_01012345678_2026");
+  assert.equal(personDocId("홍길동", "1979-10-10", EVENT_ID), "rec_홍길동_1979-10-10_2026-11");
+  assert.notEqual(ledgerDocId("a".repeat(64), "2026"), ledgerDocId("a".repeat(64), EVENT_ID));
+  assert.equal(scopeForDate("2026-11-06"), EVENT_ID);
+  assert.equal(scopeForDate("2026-08-01"), "2026");
+  assert.equal(phoneLockId("01012345678", EVENT_ID), "phone_01012345678_2026-11");
   assert.equal(phoneConflict(null, "aa"), "free");
   assert.equal(phoneConflict({ dupKey: "aa", pending: true }, "aa"), "ours");
   assert.equal(phoneConflict({ dupKey: "bb", pending: true }, "aa"), "other");
@@ -162,7 +167,9 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   assert.match(html, /3만원 이상 구매/);
   assert.match(html, /10,000원 환급/);
-  assert.match(html, /1인 연 1회\(1만원\)/);
+  assert.match(html, /이번 행사 1인 1회/);
+  assert.doesNotMatch(html, /1인 연 1회/);
+  assert.doesNotMatch(html, /잠금 갱신/);
   assert.match(html, /상품권 \(5천원권\)/);
   assert.match(html, /from "\.\/policy\.js"/);
   assert.match(html, /2026-11-06/);
@@ -183,5 +190,7 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   assert.match(rules, /2500000/);
   assert.match(rules, /2026-11-06/);
   assert.match(rules, /2026-11-07/);
+  assert.match(rules, /2026-11/);
+  assert.match(rules, /eventRound/);
   assert.doesNotMatch(rules, /3000000/);
 });

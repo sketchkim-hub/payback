@@ -7,8 +7,8 @@ rules_version = '2';
 //
 // 규칙이 막는 것
 // - 구매금액 3만원 미만·1천만원 초과, 지급액이 10,000원이 아닌 신규 접수
-// - 같은 이름+생년월일+연도의 두 번째 접수(rec_ 문서, legacy_ 잠금)
-// - 지급 전에 휴대폰 잠금 문서가 없는 접수
+// - 같은 이름+생년월일의 이번 행사(2026-11) 두 번째 접수
+// - 지급 전에 이번 행사 휴대폰 잠금 문서가 없는 접수
 // - 하루 예산 문서를 한도 위로 올리는 갱신(한 번에 1만원씩만 증가)
 // - 승인되지 않은 계정, 대표가 아닌 계정의 예외 지급·예산/점포 수정
 //
@@ -16,8 +16,7 @@ rules_version = '2';
 // - 예산 문서를 갱신하지 않고 접수 문서만 만드는 조작(카운터와 원장이 어긋남)
 // - 직원 계정으로 잠금 문서를 지운 뒤 다시 넣는 행위
 // 이름+생년월일 해시(dupKey)는 규칙에서 재계산할 수 없어, 사람 잠금은
-// 문서 ID(rec_/legacy_)로 건다. 예전 5천원 기록은 대표의 "잠금 갱신"으로
-// legacy_ 문서를 만들어야 규칙에서도 추가 지급이 막힌다.
+// 문서 ID는 회차 2026-11 이다. 연도 키(2026) 기존 문서는 읽지 않고 지우지 않는다.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -50,6 +49,9 @@ service cloud.firestore {
     function isEventDate(date) {
       return date == "2026-11-06" || date == "2026-11-07";
     }
+    function eventRound() {
+      return "2026-11";
+    }
     function dailyLimit() {
       let configured = cfg().exists && cfg().data.dailyBudget is int && cfg().data.dailyBudget > 0
         ? cfg().data.dailyBudget
@@ -69,7 +71,7 @@ service cloud.firestore {
     }
     function ledgerBlocks(ledgerId, add) {
       return !(ledgerId is string)
-        || !ledgerId.matches("^ledger_[0-9a-f]{64}_[0-9]{4}$")
+        || !ledgerId.matches("^ledger_[0-9a-f]{64}_([0-9]{4}|2026-11)$")
         || (
           exists(/databases/$(database)/documents/applications/$(ledgerId))
           && !(get(/databases/$(database)/documents/applications/$(ledgerId)).data.paid is int)
@@ -92,7 +94,7 @@ service cloud.firestore {
       return exists(path)
         && get(path).data.phoneLock == true
         && get(path).data.phone == phone
-        && get(path).data.year == year
+        && (get(path).data.round == year || get(path).data.year == year)
         && get(path).data.nameNorm == nameNorm
         && get(path).data.birth == birth;
     }
@@ -124,30 +126,30 @@ service cloud.firestore {
 
     function validPayoutCreate(id) {
       let d = request.resource.data;
-      let year = appYear(d.date);
+      let round = eventRound();
       return validIdentity(d)
         && validMoney(d)
         && d.exception != true
-        && d.ledgerId == "ledger_" + d.dupKey + "_" + year
-        && id == "rec_" + d.nameNorm + "_" + d.birth + "_" + year
-        && !legacyBlocks(d.nameNorm, d.birth, year)
+        && d.ledgerId == "ledger_" + d.dupKey + "_" + round
+        && id == "rec_" + d.nameNorm + "_" + d.birth + "_" + round
+        && !legacyBlocks(d.nameNorm, d.birth, round)
         && !ledgerBlocks(d.ledgerId, 10000)
         && isEventDate(d.date)
         && budgetRoom(d.date, 10000)
-        && phoneReady(d.phone, year, d.nameNorm, d.birth);
+        && phoneReady(d.phone, round, d.nameNorm, d.birth);
     }
     function validExceptionCreate(id) {
       let d = request.resource.data;
-      let year = appYear(d.date);
+      let round = eventRound();
       return isMaster()
         && validIdentity(d)
         && validMoney(d)
         && d.exception == true
-        && d.ledgerId == "ledger_" + d.dupKey + "_" + year
-        && id == "ex_" + d.dupKey + "_" + year + "_" + d.phone
+        && d.ledgerId == "ledger_" + d.dupKey + "_" + round
+        && id == "ex_" + d.dupKey + "_" + round + "_" + d.phone
         && isEventDate(d.date)
         && budgetRoom(d.date, 10000)
-        && phoneReady(d.phone, year, d.nameNorm, d.birth);
+        && phoneReady(d.phone, round, d.nameNorm, d.birth);
     }
     function validPayoutUpdate() {
       let d = request.resource.data;
@@ -170,40 +172,40 @@ service cloud.firestore {
 
     function validPhoneLock(id) {
       let d = request.resource.data;
+      let eventLock = d.round == "2026-11" && id == "phone_" + d.phone + "_2026-11";
+      let yearLock = d.year is string && d.year.matches("^[0-9]{4}$") && id == "phone_" + d.phone + "_" + d.year;
       return d.phoneLock == true
         && d.phone is string
         && d.phone.matches("^01[0-9]{8,9}$")
-        && d.year is string
-        && d.year.matches("^[0-9]{4}$")
+        && (eventLock || yearLock)
         && d.nameNorm is string
         && d.nameNorm.matches("^[0-9A-Za-z가-힣]{2,30}$")
         && d.birth is string
         && d.birth.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
-        && id == "phone_" + d.phone + "_" + d.year
         && d.pending is bool;
     }
     function validLegacyLock(id) {
       let d = request.resource.data;
+      let eventLock = d.round == "2026-11" && id == "legacy_" + d.nameNorm + "_" + d.birth + "_2026-11";
+      let yearLock = d.year is string && d.year.matches("^[0-9]{4}$") && id == "legacy_" + d.nameNorm + "_" + d.birth + "_" + d.year;
       return d.legacyLock == true
         && d.nameNorm is string
         && d.nameNorm.matches("^[0-9A-Za-z가-힣]{2,30}$")
         && d.birth is string
         && d.birth.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
-        && d.year is string
-        && d.year.matches("^[0-9]{4}$")
-        && id == "legacy_" + d.nameNorm + "_" + d.birth + "_" + d.year
+        && (eventLock || yearLock)
         && d.paid is int
         && d.paid >= 0
         && d.paid <= 100000;
     }
     function validLedger(id, creating) {
       let d = request.resource.data;
+      let eventLedger = d.round == "2026-11" && id == "ledger_" + d.dupKey + "_2026-11";
+      let yearLedger = d.year is string && d.year.matches("^[0-9]{4}$") && id == "ledger_" + d.dupKey + "_" + d.year;
       let shape = d.ledger == true
         && d.dupKey is string
         && d.dupKey.matches("^[0-9a-f]{64}$")
-        && d.year is string
-        && d.year.matches("^[0-9]{4}$")
-        && id == "ledger_" + d.dupKey + "_" + d.year
+        && (eventLedger || yearLedger)
         && d.paid is int
         && d.paid >= 0
         && d.paid <= 100000;
@@ -230,13 +232,14 @@ service cloud.firestore {
     // 대표가 삭제·정리할 때 예전 문서(필드 누락)도 지급액·예산을 줄일 수 있게 한다.
     function masterLedgerDecrease(id) {
       return isMaster()
-        && id.matches("^ledger_[0-9a-f]{64}_[0-9]{4}$")
+        && id.matches("^ledger_[0-9a-f]{64}_([0-9]{4}|2026-11)$")
         && request.resource.data.ledger == true
         && request.resource.data.dupKey is string
         && request.resource.data.dupKey.matches("^[0-9a-f]{64}$")
-        && request.resource.data.year is string
-        && request.resource.data.year.matches("^[0-9]{4}$")
-        && id == "ledger_" + request.resource.data.dupKey + "_" + request.resource.data.year
+        && (
+          (request.resource.data.round == "2026-11" && id == "ledger_" + request.resource.data.dupKey + "_2026-11")
+          || (request.resource.data.year is string && request.resource.data.year.matches("^[0-9]{4}$") && id == "ledger_" + request.resource.data.dupKey + "_" + request.resource.data.year)
+        )
         && request.resource.data.paid is int
         && request.resource.data.paid >= 0
         && request.resource.data.paid <= 100000

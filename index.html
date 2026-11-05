@@ -266,7 +266,7 @@
         <div class="form-grid">
           <div id="budgetBar" class="wide budget-bar"></div>
           <div class="tier-row wide">
-            <div class="tier t10"><b>3만원 이상 구매 · 1인 연 1회</b><span class="amt">10,000원 환급</span></div>
+            <div class="tier t10"><b>3만원 이상 구매 · 이번 행사 1인 1회</b><span class="amt">10,000원 환급</span></div>
           </div>
 
           <div class="field wide">
@@ -344,7 +344,7 @@
               <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
                  • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
                  • 행사 기간: 2026년 11월 6일, 11월 7일. 이 이틀에만 접수됩니다.<br>
-                 • 지급 기준: 3만원 이상 구매 시 10,000원 환급, 1인 연 1회(1만원). 같은 해에 이미 받았거나 같은 휴대폰으로 받은 기록이 있으면 다시 지급하지 않습니다. 하루 예산은 2,500,000원입니다.<br>
+                 • 지급 기준: 3만원 이상 구매 시 10,000원 환급, 이번 행사 1인 1회(1만원). 이번 행사(11월 6일·7일)에서 이미 받았거나 같은 휴대폰으로 받은 기록이 있으면 다시 지급하지 않습니다. 이전 행사 기록은 이번 한도에 포함되지 않습니다. 하루 예산은 2,500,000원입니다.<br>
                  • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
                  • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
                  • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
@@ -484,13 +484,6 @@
           <div id="budgetMsg" class="err"></div>
         </div>
 
-        <div class="modal-sec" id="lockSec" style="display:none">
-          <h4>기존 지급 잠금</h4>
-          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">이미 지급된 이름·생년월일·휴대폰을 잠급니다. 예전 5,000원 기록도 올해 1회 한도에 포함됩니다. 보안 규칙을 배포한 뒤 한 번 실행하세요.</p>
-          <button id="backfillBtn" class="btn-sm btn-blue" style="color:#fff">잠금 갱신</button>
-          <div id="backfillMsg" class="err"></div>
-        </div>
-
         <div class="modal-sec" id="storeSec" style="display:none">
           <h4>상인회 점포 명단 관리</h4>
           <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">엑셀(1열: 점포명, 2열: 업종) 업로드 또는 직접 추가한 점포가 입력창에서 자동완성됩니다. <span id="storeCount">0</span>곳 등록 · <span id="storeCatNote" style="color:var(--dancheong-red)"></span></p>
@@ -584,7 +577,7 @@ import { PAYOUT_AMOUNT, PAYOUT_CAP, DEFAULT_DAILY_BUDGET, DAILY_BUDGET_CAP, MAX_
   personDocId, legacyLockId, phoneLockId, ledgerDocId, exceptionDocId,
   isPayoutRecord, samePerson, decidePayout, validateEntry, summarizeVouchers,
   budgetStatusText, blockTitle, phoneConflict, effectiveDailyBudget,
-  EVENT_DATES, defaultEventDate }
+  EVENT_DATES, EVENT_ID, isEventDate, defaultEventDate, scopeForDate }
   from "./policy.js";
 
 /* ===================================================================
@@ -788,7 +781,6 @@ function startApp(){
     $("pendingSec").style.display = isMaster ? "block" : "none";
     $("storeSec").style.display = isMaster ? "block" : "none";
     $("budgetSec").style.display = isMaster ? "block" : "none";
-    $("lockSec").style.display = isMaster ? "block" : "none";
     if (isMaster){ renderMasterList(); renderPendingList(); renderStoreList(); renderBudgetSetting(); }
     acctModal.classList.add("show");
   }
@@ -872,61 +864,6 @@ function startApp(){
       await setDoc(doc(db,"applications",CFG_ID), { config:true, dailyBudget:v, updatedAt: serverTimestamp() }, { merge:true });
       msg.style.color="var(--dancheong-blue)"; msg.textContent=`일일 예산을 ${won(v)}원으로 저장했습니다.`;
     } catch(e){ msg.textContent="저장 실패: "+(e.code||e.message); }
-  };
-
-  $("backfillBtn").onclick = async ()=>{
-    if (!isMaster) return;
-    const btn = $("backfillBtn");
-    const msg = $("backfillMsg");
-    btn.disabled = true; msg.style.color=""; msg.textContent="기존 기록을 확인하는 중…";
-    try {
-      const snap = await getDocs(col);
-      const all = snap.docs.map(d=>({id:d.id, ...d.data()}));
-      const payouts = all.filter(isPayoutRecord);
-      const phoneOwner = new Map();
-      all.forEach(d=>{
-        if (d.phoneLock && d.phone && d.year) phoneOwner.set(d.phone+"_"+d.year, d.dupKey||"");
-      });
-      const groups = new Map();
-      let skipped = 0, failed = 0;
-      payouts.forEach(r=>{
-        const year = yearOf(r.date);
-        const nameNorm = cleanName(r.nameNorm || r.name || "");
-        const birth = String(r.birth||"").trim();
-        if (!/^[0-9A-Za-z가-힣]{2,30}$/.test(nameNorm) || !/^\d{4}-\d{2}-\d{2}$/.test(birth) || !/^\d{4}$/.test(String(year||""))) { skipped++; return; }
-        r = { ...r, birth };
-        const k = nameNorm+"|"+r.birth+"|"+year;
-        const g = groups.get(k) || { nameNorm, birth:r.birth, year, paid:0, dupKey:r.dupKey||"", phones:[] };
-        g.paid = Math.min(100000, g.paid + (Math.trunc(Number(r.coupon))||0));
-        if (r.dupKey) g.dupKey = r.dupKey;
-        if (r.phone) g.phones.push(digitsOnly(r.phone));
-        groups.set(k, g);
-      });
-      const ops = [];
-      let conflicts = 0;
-      for (const g of groups.values()){
-        ops.push({ id: legacyLockId(g.nameNorm, g.birth, g.year), data: { legacyLock:true, nameNorm:g.nameNorm, birth:g.birth, year:g.year, paid:g.paid, dupKey:g.dupKey||null } });
-        for (const phone of new Set(g.phones.filter(isValidPhone))){
-          const key = phone+"_"+g.year;
-          const owner = phoneOwner.get(key);
-          if (owner && g.dupKey && owner!==g.dupKey){ conflicts++; continue; }
-          phoneOwner.set(key, g.dupKey||"locked");
-          ops.push({ id: phoneLockId(phone, g.year), data: { phoneLock:true, pending:false, phone, nameNorm:g.nameNorm, birth:g.birth, year:g.year, dupKey:g.dupKey||null, operatorUid: currentUid } });
-        }
-      }
-      let written = 0, done = 0;
-      for (const op of ops){
-        try { await setDoc(doc(db,"applications", op.id), op.data, { merge:true }); written++; }
-        catch(err){ failed++; console.warn("lock skip", op.id, err && err.code); }
-        done++;
-        if (done % 10 === 0 || done === ops.length) msg.textContent = `저장 중… ${done}/${ops.length}`;
-      }
-      msg.style.color = failed ? "" : "var(--dancheong-blue)";
-      msg.textContent = `잠금 갱신 완료: 성공 ${written}건` + (skipped ? `, 형식 오류로 건너뜀 ${skipped}건` : "") + (failed ? `, 실패 ${failed}건` : "") + (conflicts ? `, 휴대폰 중복 건너뜀 ${conflicts}건` : "") + ".";
-    } catch(e){
-      msg.style.color="";
-      msg.textContent = "잠금 갱신 실패: " + (e.code||e.message||e);
-    } finally { btn.disabled = false; }
   };
 
   /* ---------- 상인회 점포 명단 (업종 포함) ---------- */
@@ -1118,7 +1055,7 @@ function startApp(){
     const years = [...new Set([thisYear, ...records.map(r=>yearOf(r.date)).filter(Boolean)])].sort().reverse();
     [["statYear", false],["dataYear", false]].forEach(([id])=>{
       const sel = $(id); if(!sel) return;
-      const prev = sel.value || thisYear;          // 기본: 올해
+      const prev = sel.value || thisYear;
       const opts = `<option value="">전체 연도</option>` + years.map(y=>`<option value="${y}">${y}년</option>`).join("");
       sel.innerHTML = opts;
       sel.value = [...sel.options].some(o=>o.value===prev) ? prev : thisYear;
@@ -1178,45 +1115,46 @@ function startApp(){
   /* ---------- 지급액 미리보기 + 기존 수령 내역 ---------- */
   // 이름에서 한글·영문·숫자 외 문자는 무시한다. 중복 키는 이름+생년월일만 쓴다.
   function matchByNameBirth(name, birth){
-    const cn = cleanName(name), yr = yearOf($("fDate").value);
-    return records.filter(x => (x.nameNorm || cleanName(x.name))===cn && x.birth===birth && yearOf(x.date)===yr);
+    const cn = cleanName(name);
+    return records.filter(x => isEventDate(x.date) && (x.nameNorm || cleanName(x.name))===cn && x.birth===birth);
   }
-  async function authPaid(name, birth, year){
+  async function authPaid(name, birth){
     const key = await makeDupKey(name, birth);
     const nameNorm = cleanName(name);
+    const round = EVENT_ID;
     let paidLedger = null, legacyPaid = 0, recs = null, recordExists = false;
     try {
-      const ls = await getDoc(doc(db,"applications", ledgerDocId(key, year)));
+      const ls = await getDoc(doc(db,"applications", ledgerDocId(key, round)));
       if (ls.exists()) paidLedger = Number(ls.data().paid)||0;
     } catch(_){}
     try {
-      const leg = await getDoc(doc(db,"applications", legacyLockId(nameNorm, birth, year)));
+      const leg = await getDoc(doc(db,"applications", legacyLockId(nameNorm, birth, round)));
       if (leg.exists()) legacyPaid = Number(leg.data().paid)||0;
-      const recSnap = await getDoc(doc(db,"applications", personDocId(nameNorm, birth, year)));
+      const recSnap = await getDoc(doc(db,"applications", personDocId(nameNorm, birth, round)));
       recordExists = recSnap.exists();
     } catch(_){}
     try {
       const qs = await getDocs(query(collection(db,"applications"), where("dupKey","==",key)));
-      recs = qs.docs.map(d=>({id:d.id,...d.data()})).filter(r=>isPayoutRecord(r) && yearOf(r.date)===year);
+      recs = qs.docs.map(d=>({id:d.id,...d.data()})).filter(r=>isPayoutRecord(r) && isEventDate(r.date));
     } catch(_){ recs = null; }
     if (!recs) recs = matchByNameBirth(name, birth);
     const paidRecs = recs.reduce((s,r)=>s+(Number(r.coupon)||0),0);
     const paid = Math.max(paidLedger!=null?paidLedger:0, legacyPaid, paidRecs);
     return { key, paid, recs, nameNorm, recordExists: recordExists || legacyPaid>0, legacyPaid };
   }
-  async function phoneUsedByOther(phone, year, dupKey, nameNorm, birth){
+  async function phoneUsedByOther(phone, dupKey, nameNorm, birth){
     if (!isValidPhone(phone)) return false;
     const owned = data => samePerson(data, nameNorm, birth, dupKey);
     try {
-      const lock = await getDoc(doc(db,"applications", phoneLockId(phone, year)));
+      const lock = await getDoc(doc(db,"applications", phoneLockId(phone, EVENT_ID)));
       if (lock.exists() && phoneConflict(lock.data(), dupKey)==="other") return true;
     } catch(_){}
-    if (records.some(r => isPayoutRecord(r) && digitsOnly(r.phone)===phone && yearOf(r.date)===year && !owned(r) && (Number(r.coupon)||0)>0)) return true;
+    if (records.some(r => isPayoutRecord(r) && isEventDate(r.date) && digitsOnly(r.phone)===phone && !owned(r) && (Number(r.coupon)||0)>0)) return true;
     try {
       const qs = await getDocs(query(collection(db,"applications"), where("phone","==",phone)));
       return qs.docs.some(d => {
         const data = {id:d.id, ...d.data()};
-        return isPayoutRecord(data) && yearOf(data.date)===year && !owned(data) && (Number(data.coupon)||0)>0;
+        return isPayoutRecord(data) && isEventDate(data.date) && !owned(data) && (Number(data.coupon)||0)>0;
       });
     } catch(_){ return false; }
   }
@@ -1232,7 +1170,7 @@ function startApp(){
     if (!amount){ el.textContent = "금액을 입력하면 지급될 환급액이 표시됩니다."; return; }
     if (amount>MAX_PURCHASE){ el.textContent = `구매금액은 ${won(MAX_PURCHASE)}원 이하로 입력해 주세요.`; return; }
     if (amount<MIN_PURCHASE){ el.innerHTML = `3만원 이상 구매 시 10,000원이 환급됩니다. (입력: ${won(amount)}원)`; return; }
-    el.innerHTML = `지급액: <b style="color:var(--dancheong-red)">10,000원</b> · 1인 연 1회`;
+    el.innerHTML = `지급액: <b style="color:var(--dancheong-red)">10,000원</b> · 이번 행사 1인 1회`;
   }
   let eligTimer=null, eligToken=0, lastAuth=null;
   function updatePreview(){
@@ -1261,8 +1199,8 @@ function startApp(){
     clearTimeout(eligTimer);
     const myToken = ++eligToken;
     eligTimer = setTimeout(async ()=>{
-      const data = await authPaid(name, birth, year);
-      const phoneUsed = await phoneUsedByOther(phone, year, data.key, cn, birth);
+      const data = await authPaid(name, birth);
+      const phoneUsed = await phoneUsedByOther(phone, data.key, cn, birth);
       const budgetIssued = await budgetIssuedFor($("fDate").value);
       if (myToken !== eligToken) return;
       lastAuth = { ...data, name, birth, year, phone, phoneUsed, budgetIssued };
@@ -1280,17 +1218,17 @@ function startApp(){
       : null;
     let head;
     if (paid>0 && !(decision && decision.ok)){
-      head = `<b style="color:${col10}">✗ 추가 환급 없음</b> · ${decision ? esc(decision.message) : `올해 ${won(paid)}원을 이미 받았습니다. 1인 연 1회(1만원)입니다.`}`;
+      head = `<b style="color:${col10}">✗ 추가 환급 없음</b> · ${decision ? esc(decision.message) : `이번 행사에서 이미 ${won(paid)}원을 받았습니다. 이번 행사 1인 1회(1만원)입니다.`}`;
     } else if (amount>0 && amount<MIN_PURCHASE){
       head = `<b style="color:${col10}">✗ 지급 대상 아님</b> · 3만원 이상 구매 시 10,000원이 환급됩니다. (입력: ${won(amount)}원)`;
     } else if (!decision){
       head = paid>0
-        ? `<b style="color:${col10}">✗ 추가 환급 없음</b> · 올해 ${won(paid)}원을 이미 받았습니다. 1인 연 1회(1만원)입니다.`
-        : `<b style="color:${colOk}">✓ 첫 접수 가능</b> · 3만원 이상이면 10,000원, 1인 연 1회`;
+        ? `<b style="color:${col10}">✗ 추가 환급 없음</b> · 이번 행사에서 이미 ${won(paid)}원을 받았습니다. 이번 행사 1인 1회(1만원)입니다.`
+        : `<b style="color:${colOk}">✓ 첫 접수 가능</b> · 3만원 이상이면 10,000원, 이번 행사 1인 1회`;
     } else if (!decision.ok){
       head = `<b style="color:${col10}">✗ 환급 불가</b> · ${esc(decision.message)}`;
     } else {
-      head = `<b style="color:${colOk}">✓ 환급 가능</b> · 이번 지급 <b>10,000원</b> <span style="color:var(--ink-soft)">(1인 연 1회)</span>`;
+      head = `<b style="color:${colOk}">✓ 환급 가능</b> · 이번 지급 <b>10,000원</b> <span style="color:var(--ink-soft)">(이번 행사 1인 1회)</span>`;
     }
     elig.className = (paid>0 && !(decision && decision.ok)) || (amount>0 && amount<MIN_PURCHASE) || (decision && !decision.ok) ? "elig-no" : "elig-ok";
     elig.innerHTML = head;
@@ -1302,7 +1240,7 @@ function startApp(){
       const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 같은 이름·생년월일 내역이 있습니다. 같은 사람이면 추가 지급은 되지 않습니다.</div>` : "";
       box.className = "histbox show" + (decision && !decision.ok ? " cap" : "");
       box.innerHTML =
-        `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · ${esc(year)}년 수령 내역</div>`
+        `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · 이번 행사 수령 내역</div>`
         + items
         + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원 / 한도 ${won(PAYOUT_CAP)}원</span></div>`
         + phoneWarn;
@@ -1399,7 +1337,7 @@ function startApp(){
       const decision = assess(st, allowCapBypass);
       if (!decision.ok) return { decision, paid: st.paid };
       if (st.conflict==="free"){
-        tx.set(phoneRef, { phoneLock:true, pending:true, phone, nameNorm, birth, year, dupKey, operatorUid: currentUid });
+        tx.set(phoneRef, { phoneLock:true, pending:true, phone, nameNorm, birth, round: EVENT_ID, dupKey, operatorUid: currentUid });
       }
       return { decision, paid: st.paid };
     });
@@ -1424,10 +1362,10 @@ function startApp(){
         };
         if (allowCapBypass){ body.exception = true; body.approvedBy = currentEmail; }
         tx.set(recRef, body);
-        tx.set(ledgerRef, { ledger:true, paid: nextPaid, dupKey, year, updatedAt: serverTimestamp() }, { merge:true });
+        tx.set(ledgerRef, { ledger:true, paid: nextPaid, dupKey, round: EVENT_ID, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date, issued: budgetIssuedOf(st.budgetSnap) + PAYOUT_AMOUNT }, { merge:true });
-        tx.set(phoneRef, { phoneLock:true, pending:false, phone, nameNorm, birth, year, dupKey, operatorUid: currentUid }, { merge:true });
-        tx.set(legacyRef, { legacyLock:true, nameNorm, birth, year, paid: nextPaid, dupKey }, { merge:true });
+        tx.set(phoneRef, { phoneLock:true, pending:false, phone, nameNorm, birth, round: EVENT_ID, dupKey, operatorUid: currentUid }, { merge:true });
+        tx.set(legacyRef, { legacyLock:true, nameNorm, birth, round: EVENT_ID, paid: nextPaid, dupKey }, { merge:true });
         return { decision, paid: st.paid };
       });
     } catch(e){
@@ -1470,15 +1408,15 @@ function startApp(){
     submitting = true; $("submitBtn").disabled = true;
     try{
       const dupKey = await makeDupKey(name, birth);
-      const info = await authPaid(name, birth, form.year);
-      const phoneUsed = await phoneUsedByOther(form.phone, form.year, dupKey, form.nameNorm, birth);
+      const info = await authPaid(name, birth);
+      const phoneUsed = await phoneUsedByOther(form.phone, dupKey, form.nameNorm, birth);
       const budgetIssued = await budgetIssuedFor(date);
       const diffPhone = (info.recs||[]).some(x => digitsOnly(x.phone) && digitsOnly(x.phone)!==form.phone);
       const decision = decidePayout({
         amount: form.amount, paid: info.paid, phoneUsed, recordExists: info.recordExists,
         budgetIssued, dailyBudget
       });
-      const payload = { date, name, nameNorm: form.nameNorm, birth, phone: form.phone, district, address, store, storeCat, marketing, amount: form.amount, dupKey, year: form.year, paidHint: info.paid };
+      const payload = { date, name, nameNorm: form.nameNorm, birth, phone: form.phone, district, address, store, storeCat, marketing, amount: form.amount, dupKey, year: EVENT_ID, paidHint: info.paid };
       if (!decision.ok){
         showDecision(decision, { diffPhone, allowException: isMaster && decision.code==="cap" && diffPhone && !phoneUsed, payload });
         return;
@@ -1486,7 +1424,7 @@ function startApp(){
       const saved = await reserveAndSave(payload);
       if (!saved.decision.ok){ showDecision(saved.decision, { diffPhone, allowException: false, payload }); return; }
       r.className="result ok show";
-      r.innerHTML = `<span class="big">✔ ${won(PAYOUT_AMOUNT)}원 환급</span>${esc(name)} 님 접수 완료. (구매 ${won(form.amount)}원)<br><span style="font-size:12px;color:var(--dancheong-red)">1인 연 1회(1만원) 한도에 도달하여 올해는 추가 지급되지 않습니다.</span>`;
+      r.innerHTML = `<span class="big">✔ ${won(PAYOUT_AMOUNT)}원 환급</span>${esc(name)} 님 접수 완료. (구매 ${won(form.amount)}원)<br><span style="font-size:12px;color:var(--dancheong-red)">이번 행사 1인 1회(1만원)이라 이번 행사에서는 추가 지급되지 않습니다.</span>`;
       resetForm(false);
     }catch(e){ toast(r,"warn","저장 실패", explainFs(e)); }
     finally{ submitting=false; $("submitBtn").disabled=false; }
@@ -1496,7 +1434,7 @@ function startApp(){
   async function doException(){
     const p = pendingException;
     if (!p || !isMaster){ alert("예외 지급은 대표 관리자만 할 수 있습니다."); return; }
-    if (!confirm(`예외 지급\n\n${p.name} 님은 올해 이미 한도를 받았습니다.\n전화번호가 다른 동명이인이 맞는지 확인한 뒤 ${won(PAYOUT_AMOUNT)}원을 지급합니다.\n하루 예산과 3만원 기준은 그대로 적용됩니다. 계속할까요?`)) return;
+    if (!confirm(`예외 지급\n\n${p.name} 님은 이번 행사에서 이미 한도를 받았습니다.\n전화번호가 다른 동명이인이 맞는지 확인한 뒤 ${won(PAYOUT_AMOUNT)}원을 지급합니다.\n하루 예산과 3만원 기준은 그대로 적용됩니다. 계속할까요?`)) return;
     submitting = true; $("submitBtn").disabled = true;
     try{
       const saved = await reserveAndSave({ ...p, allowCapBypass:true });
@@ -1511,7 +1449,8 @@ function startApp(){
   /* ---------- 통계 ---------- */
   function statsSource(ignoreOp){
     const y = $("statYear").value;            // "" = 전체 연도
-    let rows = y ? records.filter(r=>yearOf(r.date)===y) : records;
+    let rows = records.filter(r=>isEventDate(r.date));
+    if (y) rows = rows.filter(r=>yearOf(r.date)===y);
     if ($("statScope").value!=="all"){
       const d = $("statDate").value;
       rows = rows.filter(r=>r.date===d);
@@ -1606,7 +1545,7 @@ function startApp(){
     const fd = $("dataDate").value;
     const fg = $("dataDistrict").value;
     const fo = $("dataOperator").value;
-    let rows = records;
+    let rows = records.filter(r=>isEventDate(r.date));
     if (fy) rows = rows.filter(r=>yearOf(r.date)===fy);
     if (fd) rows = rows.filter(r=>r.date===fd);
     if (fg) rows = rows.filter(r=>(r.district||"")===fg);
@@ -1685,16 +1624,16 @@ function startApp(){
     if (nv === (r.coupon||0) && !nameChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
 
     const delta = nv - (r.coupon||0);
-    const oldLid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
-    // 이름이 바뀌면 중복키(이름+생년월일)가 바뀌므로 누적 원장을 새 키로 이전
+    const editScope = scopeForDate(r.date);
+    const eventRow = isEventDate(r.date);
+    const oldLid = r.ledgerId || (r.dupKey ? ledgerDocId(r.dupKey, editScope) : null);
     let newDupKey = r.dupKey, newLid = oldLid, moveLedger = false, seedPaid = 0;
     if (nameChanged){
       newDupKey = await makeDupKey(nname, r.birth);
-      newLid = ledgerDocId(newDupKey, yearOf(r.date));
+      newLid = ledgerDocId(newDupKey, editScope);
       moveLedger = (newLid !== oldLid);
       if (moveLedger){
-        // 새 이름으로 이미 접수된 같은 사람의 기존 지급액(이 건 제외)
-        seedPaid = records.filter(x => x.id!==r.id && yearOf(x.date)===yearOf(r.date)
+        seedPaid = records.filter(x => x.id!==r.id && (eventRow ? isEventDate(x.date) : yearOf(x.date)===yearOf(r.date))
           && cleanName(x.name)===cleanName(nname) && x.birth===r.birth)
           .reduce((s,x)=>s+(x.coupon||0),0);
       }
@@ -1707,7 +1646,7 @@ function startApp(){
     $("edSaveBtn").disabled = true;
     try{
       const budgetRef = r.date ? doc(db,"applications","budget_"+r.date) : null;
-      const yr = yearOf(r.date);
+      const yr = editScope;
       const oldNorm = r.nameNorm || cleanName(r.name);
       const newNorm = cleanName(nname);
       const oldLegacyRef = oldNorm && r.birth ? doc(db,"applications", legacyLockId(oldNorm, r.birth, yr)) : null;
@@ -1736,14 +1675,15 @@ function startApp(){
           const issued = bs && bs.exists() ? (Number(bs.data().issued)||0) : 0;
           if (issued + delta > dailyBudget) return "budget";
         }
+        const scopeFields = eventRow ? { round: EVENT_ID } : { year: yr };
         const putLegacy = (ref, snap, norm, paid, dup)=>{
           if (!ref || !norm) return;
-          if (paid>0) tx.set(ref, { legacyLock:true, nameNorm:norm, birth:r.birth, year:yr, paid, dupKey:dup||null }, { merge:true });
+          if (paid>0) tx.set(ref, { legacyLock:true, nameNorm:norm, birth:r.birth, ...scopeFields, paid, dupKey:dup||null }, { merge:true });
           else if (snap && snap.exists()) tx.delete(ref);
         };
         if (moveLedger){
           if (oldLs && oldLs.exists()) tx.set(doc(db,"applications",oldLid), { paid:oldPaidAfter }, { merge:true });
-          tx.set(doc(db,"applications",newLid), { ledger:true, paid:newPaidAfter, dupKey:newDupKey, year:yr, updatedAt: serverTimestamp() }, { merge:true });
+          tx.set(doc(db,"applications",newLid), { ledger:true, paid:newPaidAfter, dupKey:newDupKey, ...scopeFields, updatedAt: serverTimestamp() }, { merge:true });
           putLegacy(oldLegacyRef, oldLeg, oldNorm, oldPaidAfter, r.dupKey);
           putLegacy(newLegacyRef, newLeg, newNorm, newPaidAfter, newDupKey);
         } else if (oldLid && oldLs && oldLs.exists() && delta!==0){
@@ -1766,7 +1706,7 @@ function startApp(){
         tx.set(doc(db,"applications",r.id), upd, { merge:true });
         return "ok";
       });
-      if (outcome==="cap"){ msg.textContent="수정 후 한도가 1만원을 넘습니다. 1인 연 1회를 유지하려면 금액을 줄이세요."; return; }
+      if (outcome==="cap"){ msg.textContent="수정 후 한도가 1만원을 넘습니다. 이번 행사 1인 1회를 유지하려면 금액을 줄이세요."; return; }
       if (outcome==="budget"){ msg.textContent="하루 예산을 초과하는 금액으로는 올릴 수 없습니다."; return; }
       msg.style.color="var(--dancheong-blue)"; msg.textContent="수정되었습니다.";
       setTimeout(closeEdit, 700);
@@ -1777,7 +1717,8 @@ function startApp(){
   /* ---------- 삭제 (원장 차감 포함) ---------- */
   function deleteOneRecord(rec){
     const run = (withQuery)=> runTransaction(db, async (tx)=>{
-      const year = String(yearOf(rec.date)||"");
+      const eventRow = isEventDate(rec.date);
+      const year = eventRow ? EVENT_ID : String(yearOf(rec.date)||"");
       const nameNorm = cleanName(rec.nameNorm || rec.name || "");
       const phone = digitsOnly(rec.phone);
       const dupKey = rec.dupKey || null;
@@ -1786,7 +1727,7 @@ function startApp(){
       const budgetRef = rec.date ? doc(db,"applications","budget_"+rec.date) : null;
       const legacyOk = /^[0-9A-Za-z가-힣]{2,30}$/.test(nameNorm)
         && /^\d{4}-\d{2}-\d{2}$/.test(String(rec.birth||"").trim())
-        && /^\d{4}$/.test(year);
+        && (year===EVENT_ID || /^\d{4}$/.test(year));
       const birth = String(rec.birth||"").trim();
       const legacyRef = legacyOk ? doc(db,"applications", legacyLockId(nameNorm, birth, year)) : null;
       const phoneRef = isValidPhone(phone) ? doc(db,"applications", phoneLockId(phone, year)) : null;
@@ -1794,11 +1735,12 @@ function startApp(){
       const bs = budgetRef ? await tx.get(budgetRef) : null;
       const legacySnap = legacyRef ? await tx.get(legacyRef) : null;
       const phoneSnap = phoneRef ? await tx.get(phoneRef) : null;
-      let others = records.filter(x => x.id!==rec.id && x.dupKey && x.dupKey===dupKey && yearOf(x.date)===year);
+      const sameRound = x => eventRow ? isEventDate(x.date) : yearOf(x.date)===yearOf(rec.date);
+      let others = records.filter(x => x.id!==rec.id && x.dupKey && x.dupKey===dupKey && sameRound(x));
       if (withQuery && dupKey){
         try {
           const qs = await tx.get(query(collection(db,"applications"), where("dupKey","==",dupKey)));
-          others = qs.docs.filter(d => d.id!==rec.id && isPayoutRecord({id:d.id, ...d.data()}) && yearOf(d.data().date)===year).map(d=>({id:d.id, ...d.data()}));
+          others = qs.docs.map(d=>({id:d.id, ...d.data()})).filter(d => d.id!==rec.id && isPayoutRecord(d) && sameRound(d));
         } catch(_){ /* 쿼리 실패 시 로컬 others 유지 */ }
       }
       let nextPaid = 0;
@@ -1807,15 +1749,20 @@ function startApp(){
         nextPaid = Math.max(0, (Number(prev.paid)||0) - coupon);
         const dk = (typeof prev.dupKey==="string" && /^[0-9a-f]{64}$/.test(prev.dupKey)) ? prev.dupKey
           : (typeof dupKey==="string" && /^[0-9a-f]{64}$/.test(dupKey) ? dupKey : "");
-        const yr = String(prev.year || year);
-        if (dk && /^\d{4}$/.test(yr)){
-          tx.set(doc(db,"applications",lid), { ledger:true, dupKey:dk, year:yr, paid:nextPaid }, { merge:true });
+        if (dk && eventRow){
+          tx.set(doc(db,"applications",lid), { ledger:true, dupKey:dk, round: EVENT_ID, paid:nextPaid }, { merge:true });
+        } else if (dk && /^\d{4}$/.test(String(prev.year || year))){
+          tx.set(doc(db,"applications",lid), { ledger:true, dupKey:dk, year:String(prev.year || year), paid:nextPaid }, { merge:true });
         }
       }
       if (legacyRef){
         const still = others.some(d => (Number(d.coupon)||0)>0);
         const paidLeft = still ? Math.max(nextPaid, others.reduce((s,d)=>s+(Number(d.coupon)||0),0)) : nextPaid;
-        if (paidLeft>0) tx.set(legacyRef, { legacyLock:true, nameNorm, birth, year, paid:Math.min(100000, Math.floor(paidLeft)), dupKey:dupKey||null }, { merge:true });
+        if (paidLeft>0){
+          const legacyBody = { legacyLock:true, nameNorm, birth, paid:Math.min(100000, Math.floor(paidLeft)), dupKey:dupKey||null };
+          if (eventRow) legacyBody.round = EVENT_ID; else legacyBody.year = year;
+          tx.set(legacyRef, legacyBody, { merge:true });
+        }
         else if (legacySnap && legacySnap.exists()) tx.delete(legacyRef);
       }
       if (budgetRef && bs && bs.exists()){
@@ -1833,16 +1780,16 @@ function startApp(){
     // 대표는 원장 정리 트랜잭션이 막혀도 접수 문서만이라도 지운다(테스트 데이터 정리용).
     const simpleMasterWipe = async ()=>{
       if (!isMaster) throw new Error("permission-denied");
-      const year = String(yearOf(rec.date)||"");
+      const year = isEventDate(rec.date) ? EVENT_ID : String(yearOf(rec.date)||"");
       const nameNorm = cleanName(rec.nameNorm || rec.name || "");
       const phone = digitsOnly(rec.phone);
       const birth = String(rec.birth||"").trim();
       const ops = [];
       ops.push(deleteDoc(doc(db,"applications", rec.id)));
-      if (/^[0-9A-Za-z가-힣]{2,30}$/.test(nameNorm) && /^\d{4}-\d{2}-\d{2}$/.test(birth) && /^\d{4}$/.test(year)){
+      if (/^[0-9A-Za-z가-힣]{2,30}$/.test(nameNorm) && /^\d{4}-\d{2}-\d{2}$/.test(birth) && (year===EVENT_ID || /^\d{4}$/.test(year))){
         ops.push(deleteDoc(doc(db,"applications", legacyLockId(nameNorm, birth, year))).catch(()=>{}));
       }
-      if (isValidPhone(phone) && /^\d{4}$/.test(year)){
+      if (isValidPhone(phone) && (year===EVENT_ID || /^\d{4}$/.test(year))){
         ops.push(deleteDoc(doc(db,"applications", phoneLockId(phone, year))).catch(()=>{}));
       }
       await Promise.all(ops);
@@ -1904,7 +1851,7 @@ function startApp(){
     const fd = $("dataDate").value;
     const fg = $("dataDistrict").value;
     const fo = $("dataOperator").value;
-    let rows = records;
+    let rows = records.filter(r=>isEventDate(r.date));
     if (fy) rows = rows.filter(r=>yearOf(r.date)===fy);
     if (fd) rows = rows.filter(r=>r.date===fd);
     if (fg) rows = rows.filter(r=>(r.district||"")===fg);
