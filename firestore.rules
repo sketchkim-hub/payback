@@ -277,6 +277,7 @@ service cloud.firestore {
     }
 
     match /applications/{id} {
+      // 점포 명단(_stores) 포함, 승인된 담당자는 읽을 수 있다. 점포 쓰기·삭제는 대표만.
       allow read: if signedIn() && (isApproved() || id == "_config_admins");
 
       allow create: if (isApproved() && (

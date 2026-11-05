@@ -61,6 +61,12 @@
   .center-card{max-width:420px;margin:6vh auto 0}
   label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--ink)}
   .hint{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-top:4px}
+  .store-field{position:relative}
+  .store-suggest{display:none;position:absolute;left:0;right:0;top:100%;z-index:40;margin-top:4px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);max-height:240px;overflow:auto;-webkit-overflow-scrolling:touch}
+  .store-suggest.show{display:block}
+  .store-suggest button{display:flex;width:100%;justify-content:space-between;align-items:center;gap:8px;background:#fff;color:var(--ink);font-weight:500;text-align:left;padding:12px 14px;min-height:44px;border-radius:0;border-bottom:1px solid var(--line);font-size:15px}
+  .store-suggest button:last-child{border-bottom:none}
+  .store-suggest button:hover,.store-suggest button:active{background:var(--hanji-2)}
   input[type=text],input[type=password],input[type=number],input[type=date],input[type=tel],select{
     width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;
     background:#fff;font-size:15px;font-family:inherit;color:var(--ink);
@@ -269,10 +275,10 @@
             <div class="tier t10"><b>3만원 이상 구매 · 이번 행사 1인 1회</b><span class="amt">10,000원 환급</span></div>
           </div>
 
-          <div class="field wide">
+          <div class="field wide store-field">
             <label for="fStore">구매 점포 <span style="font-weight:400;color:var(--ink-soft)">(상인회 점포 확인)</span></label>
-            <input id="fStore" list="storeOptions" type="text" placeholder="점포명 2~3글자 입력 → 자동완성" autocomplete="off" />
-            <datalist id="storeOptions"></datalist>
+            <input id="fStore" type="text" placeholder="점포명 두 글자 이상 입력" autocomplete="off" enterkeyhint="search" />
+            <div id="storeSuggest" class="store-suggest" role="listbox"></div>
             <div class="hint" id="storeCheck">등록된 상인회 점포명을 입력하면 자동으로 확인됩니다.</div>
           </div>
 
@@ -573,7 +579,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, getDocs, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { PAYOUT_AMOUNT, PAYOUT_CAP, DEFAULT_DAILY_BUDGET, DAILY_BUDGET_CAP, MAX_PURCHASE, MIN_PURCHASE,
-  won, cleanName, digitsOnly, yearOf, makeDupKey, isValidPhone,
+  won, cleanName, digitsOnly, yearOf, makeDupKey, isValidPhone, filterStores,
   personDocId, legacyLockId, phoneLockId, ledgerDocId, exceptionDocId,
   isPayoutRecord, samePerson, decidePayout, validateEntry, summarizeVouchers,
   budgetStatusText, blockTitle, phoneConflict, effectiveDailyBudget,
@@ -659,7 +665,7 @@ function startApp(){
       if (storeUnsub) storeUnsub();
       storeUnsub = onSnapshot(doc(db,"applications",STORE_ID),
         snap => { storeList = (snap.exists() && Array.isArray(snap.data().stores) ? snap.data().stores : []).map(normStoreObj).filter(s=>s.name); populateStoreDatalist(); if (acctModal.classList.contains("show")) renderStoreList(); checkStore(); },
-        ()  => { storeList = []; populateStoreDatalist(); });
+        ()  => { storeList = []; populateStoreDatalist(); const el=$("storeCheck"); if(el){ el.style.color="var(--dancheong-red)"; el.textContent="점포 명단을 불러오지 못했습니다. 승인 계정인지, 보안 규칙이 게시됐는지 확인해 주세요."; } });
     } else {
       currentUid = null; currentEmail = ""; isMaster = false; isApproved = false;
       document.body.classList.remove("is-master");
@@ -875,22 +881,46 @@ function startApp(){
   };
   function findStore(name){ const nv=normStore(name); return storeList.find(s=>normStore(s.name)===nv); }
   function populateStoreDatalist(){
-    const dl = $("storeOptions"); if(!dl) return;
-    dl.innerHTML = storeList.map(s=>`<option value="${esc(s.name)}">${esc(s.cat)}</option>`).join("");
     const ns = $("newStoreCat"); if(ns && !ns.dataset.init){ ns.innerHTML = catOptions(""); ns.dataset.init="1"; }
+    renderStoreSuggest();
+  }
+  function renderStoreSuggest(){
+    const box = $("storeSuggest"); if(!box) return;
+    const v = $("fStore").value.trim();
+    const exact = findStore(v);
+    const hits = exact ? [] : filterStores(storeList, v, 20);
+    if (!hits.length){ box.classList.remove("show"); box.innerHTML=""; return; }
+    box.classList.add("show");
+    box.innerHTML = hits.map(s=>`<button type="button" class="store-pick" data-name="${esc(s.name)}"><span>${esc(s.name)}</span><span style="color:var(--ink-soft);font-weight:400;font-size:12px">${esc(s.cat||"")}</span></button>`).join("");
   }
   function checkStore(){
     const el = $("storeCheck"); if(!el) return;
     const v = $("fStore").value.trim();
-    if (!v){ el.style.color=""; el.textContent = storeList.length ? `등록된 상인회 점포 ${storeList.length}곳 — 점포명 2~3글자 입력` : "등록된 점포가 없습니다. 관리자 설정에서 명단을 등록하세요."; return; }
+    renderStoreSuggest();
+    if (!v){ el.style.color=""; el.textContent = storeList.length ? `등록된 상인회 점포 ${storeList.length}곳 — 두 글자 이상 입력하면 목록이 나옵니다` : "등록된 점포가 없습니다. 관리자 설정에서 명단을 등록하세요."; return; }
     const hit = findStore(v);
     if (hit){ el.style.color="var(--dancheong-blue)"; el.textContent = `✓ 등록된 상인회 점포입니다${hit.cat?` · 업종: ${hit.cat}`:" (업종 미지정)"}`; return; }
-    const nv = normStore(v);
-    const hits = storeList.filter(s=>normStore(s.name).includes(nv));
-    if (hits.length){ el.style.color=""; el.textContent=`검색된 점포 ${hits.length}곳: ${hits.slice(0,5).map(s=>s.name).join(", ")}${hits.length>5?" …":""} (목록에서 선택)`; }
+    const n = normStore(v).length;
+    if (n < 2){ el.style.color=""; el.textContent = "두 글자 이상 입력하면 점포 목록이 나옵니다."; return; }
+    const hits = filterStores(storeList, v, 20);
+    if (hits.length){ el.style.color=""; el.textContent = `일치하는 점포 ${hits.length}곳 — 목록에서 선택하세요.`; }
     else { el.style.color="var(--dancheong-red)"; el.textContent="⚠ 등록된 점포명이 아닙니다. 확인 후 입력하세요."; }
   }
   $("fStore").addEventListener("input", checkStore);
+  $("fStore").addEventListener("focus", checkStore);
+  let storePicking = false;
+  $("storeSuggest").addEventListener("pointerdown", e=>{ if(e.target.closest(".store-pick")) storePicking = true; });
+  $("storeSuggest").addEventListener("click", e=>{
+    const b = e.target.closest(".store-pick");
+    if (!b) return;
+    $("fStore").value = b.dataset.name || "";
+    storePicking = false;
+    checkStore();
+    $("fStore").focus();
+  });
+  $("fStore").addEventListener("blur", ()=>{
+    setTimeout(()=>{ if(!storePicking){ const box=$("storeSuggest"); if(box) box.classList.remove("show"); } storePicking=false; }, 200);
+  });
 
   function renderStoreList(){
     $("storeCount").textContent = storeList.length;
