@@ -52,6 +52,25 @@ export function digitsOnly(s) {
   return String(s || "").replace(/\D/g, "");
 }
 
+export function normStoreKey(s) {
+  return String(s || "").replace(/\s+/g, "").toLowerCase();
+}
+
+/** 두 글자 이상이면 점포명 부분 일치. 앞부분이 같은 점포를 먼저 보여 준다. */
+export function filterStores(stores, query, limit = 20) {
+  const q = normStoreKey(query);
+  if (q.length < 2) return [];
+  const hits = [];
+  for (const s of stores || []) {
+    const name = s && s.name;
+    const key = normStoreKey(name);
+    if (!key || !key.includes(q)) continue;
+    hits.push({ store: s, prefix: key.startsWith(q) });
+  }
+  hits.sort((a, b) => (a.prefix === b.prefix ? normStoreKey(a.store.name).localeCompare(normStoreKey(b.store.name), "ko") : a.prefix ? -1 : 1));
+  return hits.slice(0, limit).map(h => h.store);
+}
+
 export function yearOf(d) {
   return String(d || "").slice(0, 4);
 }

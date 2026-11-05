@@ -6,7 +6,8 @@ import {
   cleanName, couponFor, makeDupKey, decidePayout, summarizeVouchers,
   validateEntry, isPayoutRecord, budgetStatusText, personDocId, phoneLockId,
   phoneConflict, isValidPhone, isValidBirth, parseWon, effectiveDailyBudget, ledgerDocId,
-  isEventDate, defaultEventDate, DAILY_BUDGET_CAP, EVENT_ID, scopeForDate
+  isEventDate, defaultEventDate, DAILY_BUDGET_CAP, EVENT_ID, scopeForDate,
+  filterStores
 } from "./policy.js";
 
 const base = {
@@ -163,11 +164,21 @@ test("중복 키는 이름+생년월일만 쓰고 휴대폰은 넣지 않는다"
   assert.equal(a.length, 64);
 });
 
+test("점포명은 두 글자 이상 부분 일치로 찾는다", () => {
+  const stores = [{ name: "영광상회", cat: "잡화" }, { name: "청과", cat: "농산물" }, { name: "영 광 마트" }];
+  assert.deepEqual(filterStores(stores, "영").map(s => s.name), []);
+  assert.deepEqual(filterStores(stores, "영광").map(s => s.name).sort(), ["영광상회", "영 광 마트"].sort());
+  assert.deepEqual(filterStores(stores, "  영 광 ").map(s => s.name).sort(), ["영광상회", "영 광 마트"].sort());
+  assert.deepEqual(filterStores(stores, "청과").map(s => s.name), ["청과"]);
+});
+
 test("화면 문구가 새 지급 조건과 같다", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   assert.match(html, /3만원 이상 구매/);
   assert.match(html, /10,000원 환급/);
   assert.match(html, /이번 행사 1인 1회/);
+  assert.match(html, /id="storeSuggest"/);
+  assert.doesNotMatch(html, /list="storeOptions"/);
   assert.doesNotMatch(html, /1인 연 1회/);
   assert.doesNotMatch(html, /잠금 갱신/);
   assert.match(html, /상품권 \(5천원권\)/);
