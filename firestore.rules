@@ -295,22 +295,36 @@ service cloud.firestore {
           || validBudget(id, false)
           || masterLedgerDecrease(id)
           || masterBudgetDecrease(id)
+          || (isMaster() && (
+               id.matches("^ledger_.*")
+               || id.matches("^budget_.*")
+               || id.matches("^legacy_.*")
+               || id.matches("^phone_.*")
+             ) && (
+               !(request.resource.data.keys().hasAny(["paid"])) || (request.resource.data.paid is int && request.resource.data.paid >= 0)
+             ) && (
+               !(request.resource.data.keys().hasAny(["issued"])) || (request.resource.data.issued is int && request.resource.data.issued >= 0)
+             ))
           || (isMaster() && id == "_stores" && request.resource.data.config == true)
         ))
         || (id == "_config_admins" && (selfPendingUpdate() || (isMaster() && request.resource.data.config == true)));
 
-      allow delete: if isApproved()
-        && id != "_config_admins"
-        && id != "_stores"
-        && resource.data.budget != true
-        && resource.data.ledger != true
-        && (
-          resource.data.phoneLock == true
-          || resource.data.legacyLock == true
-          || (
-            resource.data.name is string
-            && resource.data.coupon is int
-            && (isMaster() || resource.data.operatorUid == request.auth.uid)
+      // 대표는 설정 문서 외 정리·테스트 삭제가 가능해야 한다.
+      // 담당자는 잠금 문서 또는 본인 접수(쿠폰 숫자)만 삭제.
+      allow delete: if isMaster() && id != "_config_admins"
+        || (isApproved()
+          && id != "_config_admins"
+          && id != "_stores"
+          && resource.data.budget != true
+          && resource.data.ledger != true
+          && (
+            resource.data.phoneLock == true
+            || resource.data.legacyLock == true
+            || (
+              resource.data.name is string
+              && (resource.data.coupon is int || resource.data.coupon is float)
+              && resource.data.operatorUid == request.auth.uid
+            )
           )
         );
     }
