@@ -38,12 +38,12 @@ service cloud.firestore {
     function isMaster() {
       return signedIn() && (
         isBootstrap() ||
-        (cfg().exists && cfg().data.masters is list && email() in cfg().data.masters)
+        (exists(cfgPath()) && cfg().data.masters is list && email() in cfg().data.masters)
       );
     }
     function isApproved() {
       return isMaster() || (
-        cfg().exists && cfg().data.approved is list && email() in cfg().data.approved
+        exists(cfgPath()) && cfg().data.approved is list && email() in cfg().data.approved
       );
     }
     function isEventDate(date) {
@@ -53,7 +53,7 @@ service cloud.firestore {
       return "2026-11";
     }
     function dailyLimit() {
-      let configured = cfg().exists && cfg().data.dailyBudget is int && cfg().data.dailyBudget > 0
+      let configured = exists(cfgPath()) && cfg().data.dailyBudget is int && cfg().data.dailyBudget > 0
         ? cfg().data.dailyBudget
         : 2500000;
       return configured < 2500000 ? configured : 2500000;

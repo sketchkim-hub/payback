@@ -178,6 +178,8 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   assert.match(html, /10,000원 환급/);
   assert.match(html, /이번 행사 1인 1회/);
   assert.match(html, /id="storeSuggest"/);
+  assert.match(html, /점포 명단을 불러오지 못했습니다\(권한\)/);
+  assert.match(html, /position:static/);
   assert.doesNotMatch(html, /list="storeOptions"/);
   assert.doesNotMatch(html, /1인 연 1회/);
   assert.doesNotMatch(html, /잠금 갱신/);
