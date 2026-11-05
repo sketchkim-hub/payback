@@ -11,7 +11,6 @@ export const MIN_PURCHASE = 30000;
 export const MAX_PURCHASE = 10000000;
 export const PAYOUT_AMOUNT = 10000;
 export const PAYOUT_CAP = 10000;
-export const VOUCHER_UNIT = 5000;
 export const DAILY_BUDGET_CAP = 2500000;
 export const DEFAULT_DAILY_BUDGET = DAILY_BUDGET_CAP;
 export const EVENT_DATES = ["2026-11-06", "2026-11-07"];
@@ -216,26 +215,25 @@ export function validateEntry(fields) {
   return { ok: errors.length === 0, errors, nameNorm, phone, amount, year: yearOf(date) };
 }
 
-/** 실물 5천원권 매수. 신규 1만원은 2매, 기존 5천원 기록은 1매로 남긴다. */
+/** 온누리상품권 1만원권 매수. 1만원 지급 1건 = 1매. 5천원 기록은 매수·금액에 넣지 않는다. */
 export function summarizeVouchers(coupons) {
   let n5 = 0, n10 = 0, other = 0, total = 0;
   for (const raw of coupons || []) {
     const c = Number(raw) || 0;
     if (!c) continue;
+    if (c === 5000) { n5 += 1; continue; }
     total += c;
-    if (c === 5000) n5 += 1;
-    else if (c === 10000) n10 += 1;
+    if (c === 10000) n10 += 1;
     else other += 1;
   }
-  const sheets = total / VOUCHER_UNIT;
-  const sheetLabel = Number.isInteger(sheets) ? String(sheets) : sheets.toFixed(1);
-  let note;
-  if (n5 === 0 && n10 === 0 && other === 0) note = "지급 없음";
-  else if (other > 0) note = `1만원 ${n10}건 · 기존 5천원 ${n5}건 · 기타 ${other}건`;
-  else if (n5 === 0) note = `1만원 지급 ${n10}건 = 각 2매`;
-  else if (n10 === 0) note = `기존 5천원 지급 ${n5}건 = 각 1매`;
-  else note = `1만원 ${n10}건(2매) · 기존 5천원 ${n5}건(1매)`;
-  return { n5, n10, other, total, sheets, sheetLabel, note };
+  const sheets = n10;
+  const sheetLabel = String(sheets);
+  const parts = [];
+  if (n10 === 0 && other === 0) parts.push(n5 ? "이번 행사 지급 없음" : "지급 없음");
+  else parts.push(`1만원 지급 ${n10}건 = 각 1매`);
+  if (other > 0) parts.push(`기타 ${other}건`);
+  if (n5 > 0) parts.push(`5천원권(이전) ${n5}매`);
+  return { n5, n10, other, total, sheets, sheetLabel, note: parts.join(" · ") };
 }
 
 export function budgetStatusText(issued, dailyBudget) {
