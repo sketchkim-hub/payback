@@ -888,13 +888,16 @@ function startApp(){
         if (d.phoneLock && d.phone && d.year) phoneOwner.set(d.phone+"_"+d.year, d.dupKey||"");
       });
       const groups = new Map();
+      let skipped = 0, failed = 0;
       payouts.forEach(r=>{
         const year = yearOf(r.date);
-        const nameNorm = r.nameNorm || cleanName(r.name);
-        if (!nameNorm || !r.birth || !year) return;
+        const nameNorm = cleanName(r.nameNorm || r.name || "");
+        const birth = String(r.birth||"").trim();
+        if (!/^[0-9A-Za-z가-힣]{2,30}$/.test(nameNorm) || !/^\d{4}-\d{2}-\d{2}$/.test(birth) || !/^\d{4}$/.test(String(year||""))) { skipped++; return; }
+        r = { ...r, birth };
         const k = nameNorm+"|"+r.birth+"|"+year;
         const g = groups.get(k) || { nameNorm, birth:r.birth, year, paid:0, dupKey:r.dupKey||"", phones:[] };
-        g.paid += Number(r.coupon)||0;
+        g.paid = Math.min(100000, g.paid + (Math.trunc(Number(r.coupon))||0));
         if (r.dupKey) g.dupKey = r.dupKey;
         if (r.phone) g.phones.push(digitsOnly(r.phone));
         groups.set(k, g);
@@ -911,16 +914,15 @@ function startApp(){
           ops.push({ id: phoneLockId(phone, g.year), data: { phoneLock:true, pending:false, phone, nameNorm:g.nameNorm, birth:g.birth, year:g.year, dupKey:g.dupKey||null, operatorUid: currentUid } });
         }
       }
-      let written = 0;
-      for (let i=0;i<ops.length;i+=400){
-        const batch = writeBatch(db);
-        ops.slice(i, i+400).forEach(op=> batch.set(doc(db,"applications", op.id), op.data, { merge:true }));
-        await batch.commit();
-        written += Math.min(400, ops.length-i);
-        msg.textContent = `저장 중… ${written}/${ops.length}`;
+      let written = 0, done = 0;
+      for (const op of ops){
+        try { await setDoc(doc(db,"applications", op.id), op.data, { merge:true }); written++; }
+        catch(err){ failed++; console.warn("lock skip", op.id, err && err.code); }
+        done++;
+        if (done % 10 === 0 || done === ops.length) msg.textContent = `저장 중… ${done}/${ops.length}`;
       }
-      msg.style.color="var(--dancheong-blue)";
-      msg.textContent = `잠금 ${ops.length}건을 갱신했습니다.` + (conflicts ? ` 휴대폰이 서로 다른 사람과 겹친 ${conflicts}건은 건너뛰었습니다.` : "");
+      msg.style.color = failed ? "" : "var(--dancheong-blue)";
+      msg.textContent = `잠금 갱신 완료: 성공 ${written}건` + (skipped ? `, 형식 오류로 건너뜀 ${skipped}건` : "") + (failed ? `, 실패 ${failed}건` : "") + (conflicts ? `, 휴대폰 중복 건너뜀 ${conflicts}건` : "") + ".";
     } catch(e){
       msg.style.color="";
       msg.textContent = "잠금 갱신 실패: " + (e.code||e.message||e);
