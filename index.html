@@ -1368,8 +1368,14 @@ function startApp(){
 
   function budgetIssuedOf(snap){ return snap.exists() ? (Number(snap.data().issued)||0) : 0; }
   function explainFs(e){
-    const code = e && (e.code||"");
-    if (String(code).includes("permission-denied")) return "저장이 거부되었습니다. 금액, 한도, 휴대폰, 하루 예산 조건을 확인해 주세요.";
+    const code = String(e && e.code || "");
+    const msg = String(e && e.message || "");
+    if (code.includes("permission-denied")) {
+      if (msg.includes("maximum of 1000")) return "저장이 거부되었습니다. 보안 규칙 검사가 한도를 넘겼습니다. main의 firestore.rules를 다시 게시한 뒤 저장해 주세요.";
+      const missing = /Property ([^ ]+) is undefined/.exec(msg);
+      if (missing) return `저장이 거부되었습니다. 규칙이 '${missing[1]}' 항목을 검사하지 못했습니다. 최신 firestore.rules를 다시 게시해 주세요.`;
+      return "저장이 거부되었습니다. 신청일이 11월 6·7일인지, 구매금액이 3만원 이상인지, 이번 행사에 이미 받았는지, 하루 예산 250만 원을 넘지 않았는지 확인해 주세요.";
+    }
     if (String(code).includes("failed-precondition") || String(code).includes("aborted")) return "다른 접수와 겹쳤습니다. 다시 한 번 눌러 주세요.";
     return "네트워크/권한 오류: " + (code || e.message || e);
   }
@@ -1437,7 +1443,7 @@ function startApp(){
         const nextPaid = st.paid + PAYOUT_AMOUNT;
         const body = {
           date, name, nameNorm, birth, phone, district, address, store, storeCat,
-          amount, coupon: PAYOUT_AMOUNT, marketing, dupKey, ledgerId: ledgerDocId(dupKey, year),
+          amount, coupon: PAYOUT_AMOUNT, marketing, exception: false, dupKey, ledgerId: ledgerDocId(dupKey, year),
           operatorUid: currentUid, operatorEmail: (currentEmail||"").toLowerCase(), createdAt: serverTimestamp()
         };
         if (allowCapBypass){ body.exception = true; body.approvedBy = currentEmail; }

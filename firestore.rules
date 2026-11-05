@@ -129,7 +129,7 @@ service cloud.firestore {
       let round = eventRound();
       return validIdentity(d)
         && validMoney(d)
-        && d.exception != true
+        && d.get("exception", false) != true
         && d.ledgerId == "ledger_" + d.dupKey + "_" + round
         && id == "rec_" + d.nameNorm + "_" + d.birth + "_" + round
         && !legacyBlocks(d.nameNorm, d.birth, round)
@@ -276,42 +276,35 @@ service cloud.firestore {
         && request.resource.data.pending.hasAll(resource.data.get("pending", []));
     }
 
+    function has(key) {
+      return request.resource.data.keys().hasAny([key]);
+    }
+
     match /applications/{id} {
       // 점포 명단(_stores) 포함, 승인된 담당자는 읽을 수 있다. 점포 쓰기·삭제는 대표만.
+      // 쓰기 종류를 먼저 가른다. 다른 종류의 필드를 읽으면 검사 한도(1000)를 넘겨 정상 접수도 거부된다.
       allow read: if signedIn() && (isApproved() || id == "_config_admins");
 
       allow create: if (isApproved() && (
-          validPayoutCreate(id)
-          || validExceptionCreate(id)
-          || validPhoneLock(id)
-          || validLegacyLock(id)
-          || validLedger(id, true)
-          || validBudget(id, true)
-          || (isMaster() && id == "_stores" && request.resource.data.config == true)
+          (has("name") && has("coupon") && validPayoutCreate(id))
+          || (has("exception") && has("name") && validExceptionCreate(id))
+          || (has("phoneLock") && validPhoneLock(id))
+          || (has("legacyLock") && validLegacyLock(id))
+          || (has("ledger") && validLedger(id, true))
+          || (has("budget") && validBudget(id, true))
+          || (isMaster() && id == "_stores" && request.resource.data.get("config", false) == true)
         ))
-        || (id == "_config_admins" && (selfPendingCreate() || (isMaster() && request.resource.data.config == true)));
+        || (id == "_config_admins" && (selfPendingCreate() || (isMaster() && request.resource.data.get("config", false) == true)));
 
       allow update: if (isApproved() && (
-          validPayoutUpdate()
-          || validPhoneLock(id)
-          || validLegacyLock(id)
-          || validLedger(id, false)
-          || validBudget(id, false)
-          || masterLedgerDecrease(id)
-          || masterBudgetDecrease(id)
-          || (isMaster() && (
-               id.matches("^ledger_.*")
-               || id.matches("^budget_.*")
-               || id.matches("^legacy_.*")
-               || id.matches("^phone_.*")
-             ) && (
-               !(request.resource.data.keys().hasAny(["paid"])) || (request.resource.data.paid is int && request.resource.data.paid >= 0)
-             ) && (
-               !(request.resource.data.keys().hasAny(["issued"])) || (request.resource.data.issued is int && request.resource.data.issued >= 0)
-             ))
-          || (isMaster() && id == "_stores" && request.resource.data.config == true)
+          (has("name") && has("coupon") && validPayoutUpdate())
+          || (has("phoneLock") && validPhoneLock(id))
+          || (has("legacyLock") && validLegacyLock(id))
+          || (has("ledger") && (validLedger(id, false) || masterLedgerDecrease(id)))
+          || (has("budget") && (validBudget(id, false) || masterBudgetDecrease(id)))
+          || (isMaster() && id == "_stores" && request.resource.data.get("config", false) == true)
         ))
-        || (id == "_config_admins" && (selfPendingUpdate() || (isMaster() && request.resource.data.config == true)));
+        || (id == "_config_admins" && (selfPendingUpdate() || (isMaster() && request.resource.data.get("config", false) == true)));
 
       // 대표는 설정 문서 외 정리·테스트 삭제가 가능해야 한다.
       // 담당자는 잠금 문서 또는 본인 접수(쿠폰 숫자)만 삭제.

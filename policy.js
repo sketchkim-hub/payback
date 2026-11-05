@@ -201,7 +201,7 @@ export function validateEntry(fields) {
   const errors = [];
   const date = String(fields.date || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push({ code: "date", message: "신청일자를 확인해 주세요." });
-  else if (!isEventDate(date)) errors.push({ code: "date", message: "행사 기간은 2026년 11월 6일과 7일입니다." });
+  else if (!isEventDate(date)) errors.push({ code: "date", message: "행사 기간(11/6~7)에만 접수할 수 있습니다." });
   const nameNorm = cleanName(fields.name);
   if (nameNorm.length < 2 || nameNorm.length > 30) errors.push({ code: "name", message: "이름은 2글자 이상 입력해 주세요." });
   const birth = fields.birth;
