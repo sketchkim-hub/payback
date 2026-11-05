@@ -1777,13 +1777,17 @@ function startApp(){
   /* ---------- 삭제 (원장 차감 포함) ---------- */
   function deleteOneRecord(rec){
     const run = (withQuery)=> runTransaction(db, async (tx)=>{
-      const year = yearOf(rec.date);
-      const nameNorm = rec.nameNorm || cleanName(rec.name);
+      const year = String(yearOf(rec.date)||"");
+      const nameNorm = cleanName(rec.nameNorm || rec.name || "");
       const phone = digitsOnly(rec.phone);
       const dupKey = rec.dupKey || null;
+      const coupon = Math.max(0, Number(rec.coupon)||0);
       const lid = rec.ledgerId || (dupKey ? ledgerDocId(dupKey, year) : null);
       const budgetRef = rec.date ? doc(db,"applications","budget_"+rec.date) : null;
-      const legacyRef = nameNorm && rec.birth ? doc(db,"applications", legacyLockId(nameNorm, rec.birth, year)) : null;
+      const legacyOk = /^[0-9A-Za-z가-힣]{2,30}$/.test(nameNorm)
+        && /^\d{4}-\d{2}-\d{2}$/.test(String(rec.birth||""))
+        && /^\d{4}$/.test(year);
+      const legacyRef = legacyOk ? doc(db,"applications", legacyLockId(nameNorm, rec.birth, year)) : null;
       const phoneRef = isValidPhone(phone) ? doc(db,"applications", phoneLockId(phone, year)) : null;
       const ls = lid ? await tx.get(doc(db,"applications",lid)) : null;
       const bs = budgetRef ? await tx.get(budgetRef) : null;
@@ -1794,17 +1798,31 @@ function startApp(){
         const qs = await tx.get(query(collection(db,"applications"), where("dupKey","==",dupKey)));
         others = qs.docs.filter(d => d.id!==rec.id && isPayoutRecord({id:d.id, ...d.data()}) && yearOf(d.data().date)===year).map(d=>({id:d.id, ...d.data()}));
       }
-      const nextPaid = ls && ls.exists() ? Math.max(0, (Number(ls.data().paid)||0) - (Number(rec.coupon)||0)) : 0;
-      if (ls && ls.exists()) tx.set(doc(db,"applications",lid), { paid:nextPaid }, { merge:true });
+      let nextPaid = 0;
+      if (ls && ls.exists() && lid){
+        const prev = ls.data() || {};
+        nextPaid = Math.max(0, (Number(prev.paid)||0) - coupon);
+        const dk = (typeof prev.dupKey==="string" && /^[0-9a-f]{64}$/.test(prev.dupKey)) ? prev.dupKey
+          : (typeof dupKey==="string" && /^[0-9a-f]{64}$/.test(dupKey) ? dupKey : "");
+        const yr = String(prev.year || year);
+        // 규칙이 ledger/dupKey/year 형태를 요구하므로 삭제 시에도 완전한 형태로 줄인다.
+        if (dk && /^\d{4}$/.test(yr)){
+          tx.set(doc(db,"applications",lid), { ledger:true, dupKey:dk, year:yr, paid:nextPaid }, { merge:true });
+        }
+      }
       if (legacyRef){
         const still = others.some(d => (Number(d.coupon)||0)>0);
         const paidLeft = still ? Math.max(nextPaid, others.reduce((s,d)=>s+(Number(d.coupon)||0),0)) : nextPaid;
-        if (paidLeft>0) tx.set(legacyRef, { legacyLock:true, nameNorm, birth:rec.birth, year, paid:paidLeft, dupKey }, { merge:true });
+        if (paidLeft>0) tx.set(legacyRef, { legacyLock:true, nameNorm, birth:rec.birth, year, paid:paidLeft, dupKey:dupKey||null }, { merge:true });
         else if (legacySnap && legacySnap.exists()) tx.delete(legacyRef);
       }
       if (budgetRef && bs && bs.exists()){
-        const iss = Math.max(0, (Number(bs.data().issued)||0) - (Number(rec.coupon)||0));
-        tx.set(budgetRef, { issued:iss }, { merge:true });
+        const prev = bs.data() || {};
+        const iss = Math.max(0, (Number(prev.issued)||0) - coupon);
+        const date = String(prev.date || rec.date || "");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)){
+          tx.set(budgetRef, { budget:true, date, issued:iss }, { merge:true });
+        }
       }
       const phoneStill = others.some(d => digitsOnly(d.phone)===phone && (Number(d.coupon)||0)>0);
       if (phoneRef && phoneSnap && phoneSnap.exists() && !phoneStill && (!phoneSnap.data().dupKey || phoneSnap.data().dupKey===dupKey)) tx.delete(phoneRef);

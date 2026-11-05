@@ -224,8 +224,34 @@ service cloud.firestore {
       let prev = creating ? 0 : (resource.data.issued is int ? resource.data.issued : 0);
       let allowed = creating
         ? (isEventDate(d.date) && d.issued == 10000 && d.issued <= dailyLimit())
-        : (d.issued < prev || (d.issued == prev + 10000 && d.issued <= dailyLimit()));
+        : (d.issued <= prev || (d.issued == prev + 10000 && d.issued <= dailyLimit()));
       return shape && allowed;
+    }
+    // 대표가 삭제·정리할 때 예전 문서(필드 누락)도 지급액·예산을 줄일 수 있게 한다.
+    function masterLedgerDecrease(id) {
+      return isMaster()
+        && id.matches("^ledger_[0-9a-f]{64}_[0-9]{4}$")
+        && request.resource.data.ledger == true
+        && request.resource.data.dupKey is string
+        && request.resource.data.dupKey.matches("^[0-9a-f]{64}$")
+        && request.resource.data.year is string
+        && request.resource.data.year.matches("^[0-9]{4}$")
+        && id == "ledger_" + request.resource.data.dupKey + "_" + request.resource.data.year
+        && request.resource.data.paid is int
+        && request.resource.data.paid >= 0
+        && request.resource.data.paid <= 100000
+        && request.resource.data.paid <= (resource.data.paid is int ? resource.data.paid : 100000);
+    }
+    function masterBudgetDecrease(id) {
+      return isMaster()
+        && id.matches("^budget_[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && request.resource.data.budget == true
+        && request.resource.data.date is string
+        && request.resource.data.date.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+        && id == "budget_" + request.resource.data.date
+        && request.resource.data.issued is int
+        && request.resource.data.issued >= 0
+        && request.resource.data.issued <= (resource.data.issued is int ? resource.data.issued : request.resource.data.issued);
     }
 
     function selfPendingCreate() {
@@ -267,6 +293,8 @@ service cloud.firestore {
           || validLegacyLock(id)
           || validLedger(id, false)
           || validBudget(id, false)
+          || masterLedgerDecrease(id)
+          || masterBudgetDecrease(id)
           || (isMaster() && id == "_stores" && request.resource.data.config == true)
         ))
         || (id == "_config_admins" && (selfPendingUpdate() || (isMaster() && request.resource.data.config == true)));
