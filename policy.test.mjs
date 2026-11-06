@@ -178,6 +178,11 @@ test("화면 문구가 새 지급 조건과 같다", () => {
   assert.match(html, /3만원 이상 구매/);
   assert.match(html, /이번 행사 1인 1회/);
   assert.match(html, /id="storeSuggest"/);
+  assert.match(html, /pointerdown/);
+  assert.match(html, /passive:\s*false/);
+  assert.match(html, /armNameGuard/);
+  assert.match(html, /tabindex="-1"/);
+  assert.doesNotMatch(html, /pickStore\([^)]*\)[\s\S]{0,80}fName"\)\.focus/);
   assert.match(html, /점포 명단을 불러오지 못했습니다\(권한\)/);
   assert.match(html, /\.store-suggest\{display:none;position:absolute/);
   assert.match(html, /z-index:90/);
